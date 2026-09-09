@@ -1,0 +1,9 @@
+.git
+.agents
+.codex
+**/node_modules
+**/dist
+**/.vite-temp
+**/*.tsbuildinfo
+**/*.log
+lis-backup.sql
