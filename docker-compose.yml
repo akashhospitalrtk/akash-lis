@@ -22,7 +22,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-lis}:${POSTGRES_PASSWORD:-lis_dev_password}@db:5432/${POSTGRES_DB:-lis}
-      PORT: 4000
+      PORT: 4044
       JWT_SECRET: ${JWT_SECRET:-change-this-before-production}
       HOSPITAL_NAME: ${HOSPITAL_NAME:-Akash Diagnostic Center}
       HOSPITAL_ADDRESS: ${HOSPITAL_ADDRESS:-Bhiwani Chungi, Bhiwani Road, Rohtak 124001, Haryana}
@@ -33,9 +33,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "4000:4000"
+      - "4044:4044"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4044/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -50,9 +50,9 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "8080:80"
+      - "${FRONTEND_PORT:-8080}:80"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/health"]
       interval: 10s
       timeout: 3s
       retries: 10

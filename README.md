@@ -28,7 +28,7 @@ The catalogue is intentionally administrator-only. Test and parameter codes are 
 
 ## Run
 
-1. Copy the root environment template if you want to change Docker Compose defaults:
+1. Create the root environment file and replace its `JWT_SECRET` placeholder with a unique random value of at least 32 characters. Docker Compose runs the backend in production mode and will deliberately refuse to start with the placeholder secret:
 
    ```bash
    Copy-Item .env.example .env

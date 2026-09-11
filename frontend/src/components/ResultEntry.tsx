@@ -174,11 +174,16 @@ export function ResultEntry({ order, user, onUpdated, onReport }: { order: Order
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not import the CSV.'); }
     finally { setBusy(false); event.target.value = ''; }
   }
-  function moveOnEnter(event: KeyboardEvent<HTMLElement>) {
-    if (event.key !== 'Enter' || event.shiftKey) return;
+  function moveBetweenResults(event: KeyboardEvent<HTMLElement>) {
+    if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+    const direction = event.key === 'ArrowDown' || (event.key === 'Enter' && !event.shiftKey) ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+    if (!direction) return;
     const controls = Array.from(document.querySelectorAll<HTMLElement>('[data-result-input]:not([disabled])'));
     const current = controls.indexOf(event.target as HTMLElement);
-    if (current >= 0 && controls[current + 1]) { event.preventDefault(); controls[current + 1].focus(); }
+    const next = controls[current + direction];
+    if (current < 0) return;
+    event.preventDefault();
+    next?.focus();
   }
   function jumpToInvestigation(testId: string) {
     setJumpTestId(testId);
@@ -199,7 +204,7 @@ export function ResultEntry({ order, user, onUpdated, onReport }: { order: Order
   return <section className="page result-page">
     <Header order={detailed} />
     {detailed.tests.length > 1 && <label className="investigation-jump"><span>Go to investigation</span><select value={jumpTestId} onChange={(event) => jumpToInvestigation(event.target.value)}><option value="">Choose a test panel…</option>{detailed.tests.map((test) => <option key={test.id} value={test.id}>{test.profile_code} — {test.profile_name} ({test.status.toLowerCase()})</option>)}</select></label>}
-    <div className="entry-toolbar"><div><strong>Rapid entry</strong><span>Type a value, use ↑/↓ or +/− for numeric results, press Enter for the next field · Ctrl+S saves</span></div><div className="toolbar-actions">{canEdit && detailed.sample_status === 'COLLECTED' && <button className="secondary" onClick={() => void startProcessing()} disabled={busy}>Start processing</button>}{!editingLocked && <label className="file-button">Import analyzer CSV<input type="file" accept=".csv,.txt" onChange={importCsv} /></label>}<button className="secondary" onClick={onReport}>Report preview</button>{!editingLocked && <button onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save results'}</button>}{canAuthorize && detailed.status === 'COMPLETED' && <button className="authorize" onClick={() => void authorize()} disabled={busy}>Authorize report</button>}{canAuthorize && locked && <button className="secondary" onClick={() => setShowAmendment((visible) => !visible)} disabled={busy}>Amend report</button>}</div></div>
+    <div className="entry-toolbar"><div><strong>Rapid entry</strong><span>Type a value, press ↓ or Enter for the next field, ↑ for the previous field, and use +/− to adjust numeric results · Ctrl+S saves</span></div><div className="toolbar-actions">{canEdit && detailed.sample_status === 'COLLECTED' && <button className="secondary" onClick={() => void startProcessing()} disabled={busy}>Start processing</button>}{!editingLocked && <label className="file-button">Import analyzer CSV<input type="file" accept=".csv,.txt" onChange={importCsv} /></label>}<button className="secondary" onClick={onReport}>Report preview</button>{!editingLocked && <button onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save results'}</button>}{canAuthorize && detailed.status === 'COMPLETED' && <button className="authorize" onClick={() => void authorize()} disabled={busy}>Authorize report</button>}{canAuthorize && locked && <button className="secondary" onClick={() => setShowAmendment((visible) => !visible)} disabled={busy}>Amend report</button>}</div></div>
     {message && <p className="success-message">{message}</p>}{error && <p className="form-error">{error}</p>}
     {sampleNotAccepted && <p className="notice">Accept this sample from the worklist before entering or importing results.</p>}
     {sampleNeedsProcessing && <p className="notice workflow-notice"><strong>Next step:</strong> confirm that testing has started, then choose <strong>Start processing</strong> to unlock manual entry and analyzer import.</p>}
@@ -207,7 +212,7 @@ export function ResultEntry({ order, user, onUpdated, onReport }: { order: Order
     {locked && <p className="notice">This report was authorized by {detailed.authorized_by_name || 'an authorizer'} and is now read-only. Use Amend report to create a controlled correction.</p>}
     {!locked && !canEdit && <p className="notice">This amendment is awaiting correction by a laboratory technician or administrator. You can authorize it after the corrected results are saved.</p>}
     {showAmendment && <section className="amendment-panel"><h2>Start controlled amendment</h2><p>The current authorized report will be preserved as a prior version. Enter why the correction is needed; after correction, the report must be authorized and printed again.</p><label className="field"><span>Amendment reason *</span><textarea autoFocus maxLength={500} value={amendmentReason} onChange={(event) => setAmendmentReason(event.target.value)} placeholder="e.g. Corrected Hb result after analyzer repeat" /></label><div><button type="button" className="secondary" onClick={() => { setShowAmendment(false); setAmendmentReason(''); }}>Cancel</button><button type="button" className="amend-button" onClick={() => void amend()} disabled={busy}>Begin amendment</button></div></section>}
-    <div className="test-entry-stack">{detailed.tests.map((test) => <TestEntry key={test.id} test={test} order={detailed} values={values} comments={comments} valueErrors={valueErrors} locked={editingLocked} onChange={changeResult} onCommentChange={(id, value) => setComments((current) => ({ ...current, [id]: value }))} onEnter={moveOnEnter} />)}</div>
+    <div className="test-entry-stack">{detailed.tests.map((test) => <TestEntry key={test.id} test={test} order={detailed} values={values} comments={comments} valueErrors={valueErrors} locked={editingLocked} onChange={changeResult} onCommentChange={(id, value) => setComments((current) => ({ ...current, [id]: value }))} onEnter={moveBetweenResults} />)}</div>
     {detailed.amendments?.length ? <section className="amendment-history card"><h2>Amendment history</h2>{detailed.amendments.map((amendment) => <p key={amendment.id}><strong>Amendment #{amendment.amendment_no}</strong><span>{amendment.reason}</span><small>Started by {amendment.started_by_name || 'Unknown'} · {formatDate(amendment.created_at, true)}{amendment.reauthorized_at ? ` · Re-authorized ${formatDate(amendment.reauthorized_at, true)}` : ' · Correction in progress'}</small></p>)}</section> : null}
     <section className="audit card"><h2>Audit history</h2><div>{detailed.audit?.length ? detailed.audit.map((event) => <p key={event.id}><strong>{event.event_type.replaceAll('_', ' ')}</strong><span>{event.user_name || 'System'} · {formatDate(event.created_at, true)}</span></p>) : <p className="muted">No audit activity yet.</p>}</div><p className="muted">Current user: {user.fullName} ({roleLabel(user.role)})</p></section>
   </section>;
