@@ -8,10 +8,10 @@ import { Report } from './components/Report';
 import { ResultEntry } from './components/ResultEntry';
 import { UserAdmin } from './components/UserAdmin';
 import { Worklist } from './components/Worklist';
+import { useNavigation, type Page } from './hooks/useNavigation';
 import { roleLabel } from './lib';
 import type { Hospital, Order, Profile, User } from './types';
 
-type Page = 'worklist' | 'register' | 'entry' | 'report' | 'catalogue' | 'users' | 'exports';
 const defaultHospital = { name: 'Akash Diagnostic Center', address: '', phone: '' };
 
 function NavIcon({ page }: { page: Page }) {
@@ -33,7 +33,9 @@ export default function App() {
   const [hospital, setHospital] = useState<Hospital>(defaultHospital);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [page, setPage] = useState<Page>('register');
+  const { page, orderId, navigate } = useNavigation();
+  const [orderLoading, setOrderLoading] = useState(false);
+  const setPage = (next: Page) => navigate(next, (next === 'entry' || next === 'report') ? selectedOrder?.id : undefined);
   const [worklistVersion, setWorklistVersion] = useState(0);
   const [appError, setAppError] = useState('');
 
@@ -51,21 +53,21 @@ export default function App() {
 
   useEffect(() => { void loadProfiles(); }, [loadProfiles]);
 
-  const onSession = useCallback((nextUser: User) => { setUser(nextUser); setInitialized(true); setPage('register'); }, []);
-  const openOrder = useCallback(async (id: string, destination: Page = 'entry') => {
-    try {
-      setAppError('');
-      const order = await api<Order>(`/orders/${id}`);
-      setSelectedOrder(order);
-      setPage(destination);
-    } catch (error) {
-      setAppError(error instanceof Error ? error.message : 'Could not open the order.');
-    }
-  }, []);
+  const onSession = useCallback((nextUser: User) => { setUser(nextUser); setInitialized(true); }, []);
+  const openOrder = useCallback((id: string, destination: Page = 'entry') => navigate(destination, id), [navigate]);
+  useEffect(() => {
+    if (!user || !orderId || !['entry', 'report'].includes(page)) return;
+    let active = true;
+    setOrderLoading(true); setAppError('');
+    void api<Order>(`/orders/${orderId}`).then((order) => { if (active) setSelectedOrder(order); }).catch((error: Error) => {
+      if (active) { setSelectedOrder(null); setAppError(error.message); }
+    }).finally(() => { if (active) setOrderLoading(false); });
+    return () => { active = false; };
+  }, [orderId, page, user?.id]);
   const updateOrder = useCallback((order: Order) => { setSelectedOrder(order); setWorklistVersion((version) => version + 1); }, []);
 
-  function created(order: Order) { updateOrder(order); setPage('worklist'); }
-  function logout() { clearToken(); setUser(null); setSelectedOrder(null); setPage('register'); }
+  function created(order: Order, enterValues = false) { updateOrder(order); navigate(enterValues ? 'entry' : 'worklist', enterValues ? order.id : undefined); }
+  function logout() { clearToken(); setUser(null); setSelectedOrder(null); navigate('register', undefined, true); }
 
   if (initialized === null) return <main className="auth-shell"><p className="loading">Starting LIS…</p></main>;
   if (!initialized) return <SetupScreen onSuccess={onSession} />;
@@ -89,13 +91,15 @@ export default function App() {
     </header>
     {appError && <div className="app-error">{appError}<button onClick={() => setAppError('')}>×</button></div>}
     <main>
+      {['exports', 'catalogue', 'users'].includes(page) && user.role !== 'ADMIN' && <section className="page empty-state"><h1>Administrator access required</h1><button onClick={() => setPage('worklist')}>Go to samples</button></section>}
+      {orderLoading && <p className="page loading">Loading selected order?</p>}
       {page === 'worklist' && <Worklist onOpen={openOrder} reloadKey={worklistVersion} user={user} />}
       {page === 'register' && <RegisterOrder profiles={profiles} onCreated={created} />}
-      {page === 'entry' && <ResultEntry order={selectedOrder} user={user} onUpdated={updateOrder} onReport={() => setPage('report')} />}
-      {page === 'report' && <Report order={selectedOrder} hospital={hospital} user={user} onUpdated={updateOrder} onBack={() => setPage('entry')} />}
-      {page === 'exports' && <RecordsExport />}
-      {page === 'catalogue' && <InvestigationCatalogue onChanged={() => void loadProfiles()} />}
-      {page === 'users' && <UserAdmin />}
+      {page === 'entry' && !orderLoading && <ResultEntry key={orderId || 'no-order'} onDeleted={() => { setSelectedOrder(null); setWorklistVersion((v) => v + 1); setPage('worklist'); }} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} user={user} onUpdated={updateOrder} onReport={() => setPage('report')} />}
+      {page === 'report' && !orderLoading && <Report key={orderId || 'no-order'} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} hospital={hospital} user={user} onUpdated={updateOrder} onBack={() => setPage('entry')} />}
+      {page === 'exports' && user.role === 'ADMIN' && <RecordsExport />}
+      {page === 'catalogue' && user.role === 'ADMIN' && <InvestigationCatalogue onChanged={() => void loadProfiles()} />}
+      {page === 'users' && user.role === 'ADMIN' && <UserAdmin />}
     </main>
   </div>;
 }

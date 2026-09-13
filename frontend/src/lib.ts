@@ -6,22 +6,21 @@ export function formatDate(value?: string | null, withTime = false) {
 }
 
 export function matchingReferenceRange(ranges: ReferenceRange[] = [], order: Order) {
-  const age = Number(order.age_years);
-  const hasAge = order.age_years !== null && order.age_years !== undefined && Number.isFinite(age);
-  const matches = ranges.filter((range) => {
-    const gender = !range.gender || range.gender.toLowerCase() === String(order.gender || '').toLowerCase();
-    const minAge = range.ageMin === undefined || (hasAge && age >= Number(range.ageMin));
-    const maxAge = range.ageMax === undefined || (hasAge && age <= Number(range.ageMax));
-    return gender && minAge && maxAge;
+  const factors = { days: 1, weeks: 7, months: 365.25 / 12, years: 365.25 };
+  const rawAge = order.age_value ?? order.age_years;
+  const unit = order.age_value != null ? order.age_unit || 'years' : 'years';
+  const age = Number(rawAge) * factors[unit];
+  const hasAge = rawAge !== null && rawAge !== undefined && Number.isFinite(age);
+  const matches = ranges.filter((range: ReferenceRange) => {
+    const factor = factors[range.ageUnit || 'years'];
+    const gender = !range.gender || range.gender.toLowerCase() === 'any' || range.gender.toLowerCase() === String(order.gender || '').toLowerCase();
+    return gender && (range.ageMin == null || (hasAge && age + 1e-8 >= Number(range.ageMin) * factor))
+      && (range.ageMax == null || (hasAge && age - 1e-8 <= Number(range.ageMax) * factor));
   });
-  if (!matches.length) return undefined;
   return matches.sort((left, right) => {
-    const specificity = (range: ReferenceRange) => (range.gender ? 2 : 0) + (range.ageMin !== undefined ? 2 : 0) + (range.ageMax !== undefined ? 2 : 0);
-    const bySpecificity = specificity(right) - specificity(left);
-    if (bySpecificity) return bySpecificity;
-    const leftSpan = left.ageMin !== undefined && left.ageMax !== undefined ? Number(left.ageMax) - Number(left.ageMin) : Number.POSITIVE_INFINITY;
-    const rightSpan = right.ageMin !== undefined && right.ageMax !== undefined ? Number(right.ageMax) - Number(right.ageMin) : Number.POSITIVE_INFINITY;
-    return leftSpan - rightSpan;
+    const specificity = (range: ReferenceRange) => (range.gender && range.gender.toLowerCase() !== 'any' ? 2 : 0) + (range.ageMin != null ? 2 : 0) + (range.ageMax != null ? 2 : 0);
+    const span = (range: ReferenceRange) => range.ageMin != null && range.ageMax != null ? (range.ageMax - range.ageMin) * factors[range.ageUnit || 'years'] : Infinity;
+    return specificity(right) - specificity(left) || span(left) - span(right);
   })[0];
 }
 
@@ -49,8 +48,13 @@ export function isDetailOrder(order: Order | null): order is Order & { tests: Re
   return Boolean(order && Array.isArray(order.tests));
 }
 
-export interface ResultTest { id: string; profile_code: string; profile_name: string; status: string; remarks?: string | null; sort_order: number; results: Result[] }
+export interface ResultTest { description?: string | null; id: string; profile_id: string; profile_code: string; profile_name: string; status: string; remarks?: string | null; sort_order: number; results: Result[] }
 
 export function roleLabel(role: string) {
   return { ADMIN: 'Administrator', TECHNICIAN: 'Lab technician', AUTHORIZER: 'Report authorizer' }[role] || role;
+}
+
+export function formatAge(order: Pick<Order, 'age_value' | 'age_unit' | 'age_years'>) {
+  const value = order.age_value ?? order.age_years;
+  return value == null ? '' : `${value} ${order.age_value != null ? order.age_unit || 'years' : 'years'}`;
 }

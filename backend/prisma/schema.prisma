@@ -41,6 +41,11 @@ model lab_orders {
   external_patient_id                        String?             @db.VarChar(120)
   uhid                                       String?             @db.VarChar(80)
   patient_name                               String              @db.VarChar(160)
+  age_value                                  Decimal? @db.Decimal
+  age_unit                                   String @default("years") @db.VarChar(10)
+  deleted_at                                 DateTime? @db.Timestamptz(6)
+  deleted_by                                 String? @db.Uuid
+  deletion_reason                            String?
   age_years                                  Int?
   gender                                     String?             @db.VarChar(20)
   mobile                                     String?             @db.VarChar(30)
@@ -63,6 +68,7 @@ model lab_orders {
   sample_received_by                         String?             @db.Uuid
   delivered_at                               DateTime?           @db.Timestamptz(6)
   delivered_by                               String?             @db.Uuid
+  deleted_by_user                            users? @relation("lab_orders_deleted_byTousers", fields: [deleted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   audit_events                               audit_events[]
   users_lab_orders_amended_byTousers         users?              @relation("lab_orders_amended_byTousers", fields: [amended_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users_lab_orders_authorized_byTousers      users?              @relation("lab_orders_authorized_byTousers", fields: [authorized_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -78,6 +84,7 @@ model lab_orders {
 }
 
 model order_tests {
+  description String? @db.VarChar(5000)
   id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   order_id      String         @db.Uuid
   profile_id    String?        @db.Uuid
@@ -93,6 +100,9 @@ model order_tests {
 }
 
 model profile_parameters {
+  description String? @db.VarChar(5000)
+  loinc_code          String? @db.VarChar(16)
+  reference_note      String? @db.VarChar(2000)
   id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   profile_id          String         @db.Uuid
   code                String         @db.VarChar(40)
@@ -150,6 +160,7 @@ model system_audit_events {
 }
 
 model test_profiles {
+  description String? @db.VarChar(5000)
   id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code                   String                   @unique @db.VarChar(40)
   name                   String                   @db.VarChar(160)
@@ -165,6 +176,9 @@ model test_profiles {
 }
 
 model test_results {
+  description String? @db.VarChar(5000)
+  loinc_code          String? @db.VarChar(16)
+  reference_note      String? @db.VarChar(2000)
   id                                   String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   order_test_id                        String              @db.Uuid
   parameter_id                         String?             @db.Uuid
@@ -200,6 +214,7 @@ model test_results {
 }
 
 model users {
+  deleted_orders lab_orders[] @relation("lab_orders_deleted_byTousers")
   id                                                         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   username                                                   String                   @unique @db.VarChar(60)
   password_hash                                              String

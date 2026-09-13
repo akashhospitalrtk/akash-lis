@@ -225,3 +225,22 @@ CREATE TABLE IF NOT EXISTS catalogue_audit_events (
 );
 
 CREATE INDEX IF NOT EXISTS catalogue_audit_events_profile_idx ON catalogue_audit_events(profile_id, created_at DESC);
+
+-- Optional standard observation mapping and display-only interpretive notes.
+ALTER TABLE profile_parameters ADD COLUMN IF NOT EXISTS loinc_code VARCHAR(16);
+ALTER TABLE profile_parameters ADD COLUMN IF NOT EXISTS reference_note VARCHAR(2000);
+ALTER TABLE test_results ADD COLUMN IF NOT EXISTS loinc_code VARCHAR(16);
+ALTER TABLE test_results ADD COLUMN IF NOT EXISTS reference_note VARCHAR(2000);
+
+-- Report explanations are snapshotted independently of reference limits.
+ALTER TABLE test_profiles ADD COLUMN IF NOT EXISTS description VARCHAR(5000);
+ALTER TABLE profile_parameters ADD COLUMN IF NOT EXISTS description VARCHAR(5000);
+ALTER TABLE order_tests ADD COLUMN IF NOT EXISTS description VARCHAR(5000);
+ALTER TABLE test_results ADD COLUMN IF NOT EXISTS description VARCHAR(5000);
+
+-- Preserve the stated age and unit; existing whole-year registrations remain valid.
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS age_value NUMERIC;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS age_unit VARCHAR(10) NOT NULL DEFAULT 'years' CHECK (age_unit IN ('days', 'weeks', 'months', 'years'));
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES users(id);
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deletion_reason TEXT;

@@ -1,0 +1,25 @@
+import { Router } from 'express';
+import { authenticate, allowRoles } from '../middleware/auth.js';
+import { validate, validateParams } from '../middleware/validate.js';
+import { idParamsSchema, searchSchema } from '../schemas/commonSchemas.js';
+import { recordsExportSchema, worklistSchema, orderIdsSchema, createOrderSchema, saveResultsSchema, csvImportSchema, amendmentSchema, changeTestsSchema } from '../schemas/orderSchemas.js';
+import * as controller from '../controllers/orderController.js';
+
+export const orderRoutes = Router();
+orderRoutes.get('/records/export', authenticate, allowRoles('ADMIN'), validate(recordsExportSchema, 'query'), controller.exportRecords);
+orderRoutes.get('/worklist', authenticate, validate(worklistSchema, 'query'), controller.listWorklist);
+orderRoutes.get('/patient-history', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validate(searchSchema, 'query'), controller.patientHistory);
+orderRoutes.post('/orders/samples/accept', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validate(orderIdsSchema), controller.acceptSamples);
+orderRoutes.post('/orders', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validate(createOrderSchema), controller.createOrder);
+orderRoutes.get('/orders/:id', authenticate, validateParams(idParamsSchema), controller.getOrder);
+orderRoutes.put('/orders/:id/results', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), validate(saveResultsSchema), controller.saveResults);
+orderRoutes.post('/orders/:id/start-processing', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), controller.startProcessing);
+orderRoutes.post('/orders/:id/import-csv', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), validate(csvImportSchema), controller.importCsv);
+orderRoutes.post('/orders/:id/amend', authenticate, allowRoles('ADMIN', 'AUTHORIZER'), validateParams(idParamsSchema), validate(amendmentSchema), controller.amendReport);
+orderRoutes.post('/orders/:id/authorize', authenticate, allowRoles('ADMIN', 'AUTHORIZER'), validateParams(idParamsSchema), controller.authorizeReport);
+orderRoutes.post('/orders/:id/deliver', authenticate, allowRoles('ADMIN', 'AUTHORIZER'), validateParams(idParamsSchema), controller.deliverReport);
+orderRoutes.post('/orders/:id/printed', authenticate, allowRoles('ADMIN', 'AUTHORIZER'), validateParams(idParamsSchema), controller.markPrinted);
+orderRoutes.put('/orders/:id/tests', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), validate(changeTestsSchema), controller.changeTests);
+orderRoutes.post('/orders/:id/refresh-references', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), validate(amendmentSchema), controller.refreshOrderReferences);
+orderRoutes.delete('/orders/:id', authenticate, allowRoles('ADMIN'), validateParams(idParamsSchema), validate(amendmentSchema), controller.removeReport);
+orderRoutes.post('/orders/:id/prepare-entry', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), controller.prepareEntry);

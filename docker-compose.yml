@@ -3,8 +3,8 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-lis}
-      POSTGRES_USER: ${POSTGRES_USER:-lis}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lis_dev_password}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - lis_postgres_data:/var/lib/postgresql/data
       - ./database:/docker-entrypoint-initdb.d:ro
@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-lis}:${POSTGRES_PASSWORD:-lis_dev_password}@db:5432/${POSTGRES_DB:-lis}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       PORT: 4044
       JWT_SECRET: ${JWT_SECRET:-change-this-before-production}
       HOSPITAL_NAME: ${HOSPITAL_NAME:-Akash Diagnostic Center}

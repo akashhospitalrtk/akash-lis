@@ -24,7 +24,7 @@ The analyzer boundary is intentionally small: `backend/src/services/analyzerServ
 
 An administrator can open **Investigations** to create and maintain any laboratory panel or single test. A test can contain numeric, free-text, positive/negative, or controlled-list fields; numeric fields can have separate sex/age reference intervals and safe calculated results. The starter catalogue includes CBC, LFT, KFT, thyroid, HbA1c, beta-hCG/UPT, urine, malaria, dengue, semen analysis, Pap smear, HBsAg/HIV and common viral markers.
 
-The catalogue is intentionally administrator-only. Test and parameter codes are stable for analyzer mappings, removed fields are made inactive rather than deleting clinical history, and every catalogue change is audited. Technicians can register and enter results but cannot alter result fields or reference ranges. Only an authorizer or administrator can authorize and print a completed report; authorized reports are read-only. Reference intervals and result options must be verified and approved locally by the laboratory's qualified medical professional before clinical use.
+The catalogue is intentionally administrator-only. Test and parameter codes are editable while their internal IDs stay stable; update external analyzer mappings after a rename, removed fields are made inactive rather than deleting clinical history, and every catalogue change is audited. Technicians can register and enter results but cannot alter result fields or reference ranges. Only an authorizer or administrator can authorize and print a completed report; authorized reports are read-only. Reference intervals and result options must be verified and approved locally by the laboratory's qualified medical professional before clinical use.
 
 ## Run
 
@@ -50,7 +50,7 @@ The catalogue is intentionally administrator-only. Test and parameter codes are 
    docker compose down
    ```
 
-The database migrations and common-test seed data run automatically when the backend starts. To run them manually inside the container:
+Database migrations run automatically when the backend starts. Common-test seed data is loaded only into an empty catalogue so edits survive restarts. See [the catalogue setup guide](docs/catalogue-setup.md) for H360, Chem 7, report templates, methods, values and LOINC codes. To run them manually inside the container:
 
 ```bash
 docker compose exec backend npm run migrate

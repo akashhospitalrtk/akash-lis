@@ -1,0 +1,73 @@
+import express from 'express';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+
+const { chromium } = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH || 'D:/pharmacy-on/node_modules/playwright-core/index.mjs').href);
+const app = express();
+app.use(express.static(new URL('../../frontend/dist', import.meta.url).pathname.replace(/^\/(\w:)/, '$1')));
+const server = app.listen(0, '127.0.0.1'); await new Promise((r) => server.once('listening', r));
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+page.setDefaultTimeout(10000);
+const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+const parameter = { id: 'p1', code: 'TSH', name: 'TSH', result_kind: 'NUMERIC', unit: 'mIU/mL', method: 'CLIA', reference_ranges: [{ ageMin: 0, ageMax: 12, ageUnit: 'months', low: 1, high: 8 }], reference_note: 'Synthetic interpretation note', select_options: [], common_values: [], sort_order: 1, active: true };
+const profile = { id: 't1', code: 'THYROID', name: 'Thyroid', department: 'Immunoassay', specimen_type: 'Serum', parameters: [parameter] };
+let order = { id: 'o1', accession_no: 'SYNTHETIC-001', patient_name: 'Synthetic Infant', age_value: 6, age_unit: 'months', age_years: 0, gender: 'Male', sample_date: new Date().toISOString(), created_at: new Date().toISOString(), status: 'PENDING', sample_status: 'IN_PROCESS', tests: [{ id: 'ot1', profile_id: 't1', profile_name: 'Thyroid', profile_code: 'THYROID', status: 'PENDING', results: [{ ...parameter, id: 'r1', parameter_code: 'TSH', parameter_name: 'TSH', result_value: null }] }], audit: [] };
+let agePayload; let actionPayload;
+await page.route('**/api/**', async (route) => {
+  const request = route.request(); const path = new URL(request.url()).pathname; let data = {};
+  if (path.endsWith('/config')) data = { hospital: { name: 'Synthetic Lab', address: '', phone: '' } };
+  else if (path.endsWith('/setup/status')) data = { initialized: true };
+  else if (path.endsWith('/auth/me')) data = { user: { id: 'u1', fullName: 'Synthetic Admin', role: 'ADMIN' } };
+  else if (path.endsWith('/descriptions')) data = { profiles: {}, parameters: {} };
+  else if (path.endsWith('/profiles')) data = [profile];
+  else if (path.endsWith('/worklist')) data = [{ ...order, tests: 'Thyroid' }];
+  else if (path.endsWith('/orders') && request.method() === 'POST') { agePayload = request.postDataJSON(); data = order; }
+  else if (path.includes('/orders/o1')) {
+    if (request.method() !== 'GET') actionPayload = { path, method: request.method(), body: request.postDataJSON() };
+    if (path.endsWith('/refresh-references')) order.tests[0].results[0].reference_ranges[0].high = 10;
+    if (request.method() === 'DELETE') { await route.fulfill({ status: 204 }); return; }
+    data = order;
+  }
+  await route.fulfill({ json: data });
+});
+try {
+  await page.addInitScript(() => localStorage.setItem('lis_token', 'synthetic-browser-token'));
+  await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await page.getByLabel('Patient name *', { exact: true }).fill('Synthetic Infant');
+  await page.getByLabel('Age', { exact: true }).fill('6'); await page.getByLabel('Age unit', { exact: true }).selectOption('months');
+  await page.getByLabel('Quick add investigation').selectOption('t1'); await page.getByRole('button', { name: 'Submit sample' }).click();
+  await page.getByRole('button', { name: 'Enter', exact: true }).click();
+  assert.equal(agePayload.ageValue, 6); assert.equal(agePayload.ageUnit, 'months');
+  assert.match(await page.locator('.entry-reference').innerText(), /1 – 8/);
+  assert.match(await page.locator('.entry-reference').innerText(), /Synthetic interpretation note/);
+  await page.locator('[data-result-input]').fill('9'); assert.match(await page.locator('.flag').innerText(), /HIGH/);
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Refresh reference ranges', exact: true }).click();
+  await page.getByLabel('Reason *', { exact: true }).fill('Correct synthetic reference'); await page.getByRole('button', { name: 'Apply changes' }).click();
+  await page.waitForFunction(() => document.querySelector('.entry-reference')?.textContent.includes('10'));
+  assert.equal(actionPayload.method, 'POST');
+  await page.getByRole('button', { name: 'Change tests', exact: true }).click(); await page.getByLabel('Reason *', { exact: true }).fill('Review requested investigations');
+  await page.getByRole('button', { name: 'Apply changes' }).click(); await page.locator('.order-action-panel').waitFor({ state: 'hidden' }); assert.deepEqual(actionPayload.body.profileIds, ['t1']);
+  await fs.mkdir(new URL('../test-results/', import.meta.url), { recursive: true });
+  await page.screenshot({ path: 'test-results/revision-results.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.ok(await page.locator('.entry-reference').isVisible());
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await page.screenshot({ path: 'test-results/revision-results-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('button', { name: 'Delete report', exact: true }).click(); await page.getByLabel('Reason *', { exact: true }).fill('Remove synthetic duplicate'); await page.getByRole('button', { name: 'Confirm delete report' }).click();
+  await page.getByRole('button', { name: 'Investigation catalogue', exact: true }).click();
+  await page.getByLabel('Department', { exact: true }).selectOption('Immunoassay');
+  assert.equal(await page.getByLabel('Specimen type', { exact: true }).inputValue(), 'Serum');
+  assert.equal(await page.getByLabel('Method', { exact: true }).inputValue(), 'CLIA');
+  await page.getByLabel('Unit', { exact: true }).selectOption('mIU/mL');
+  await page.getByLabel('Unit', { exact: true }).selectOption('__custom'); await page.getByLabel('Custom unit', { exact: true }).fill('custom-unit');
+  await page.getByRole('button', { name: 'Add range', exact: true }).click(); await page.getByLabel('Age unit', { exact: true }).selectOption('weeks');
+  assert.equal(await page.getByLabel('Age unit', { exact: true }).inputValue(), 'weeks');
+  await page.screenshot({ path: 'test-results/revision-catalogue.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.deepEqual(errors, []);
+  console.log('Browser checks passed: registration age, ranges and notes, flags, refresh, change tests, deletion, dropdown defaults, custom units and mobile layout. API responses are synthetic; database workflows are tested separately.');
+} catch (error) { await fs.mkdir('test-results', { recursive: true }); await page.screenshot({ path: 'test-results/revision-failure.png', fullPage: true }); throw error; } finally { await browser.close(); server.closeAllConnections(); await new Promise((r) => server.close(r)); }

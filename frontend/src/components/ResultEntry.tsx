@@ -1,6 +1,7 @@
+import { OrderActions } from './OrderActions';
 import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { formatDate, isDetailOrder, referenceText, resultFlag, roleLabel, type ResultTest } from '../lib';
+import { formatAge, formatDate, isDetailOrder, referenceText, resultFlag, roleLabel, type ResultTest } from '../lib';
 import type { Order, Result, User } from '../types';
 import { Status } from './Worklist';
 
@@ -81,10 +82,10 @@ function InputForResult({ result, value, locked, onChange, autoFocus }: { result
 }
 
 function Header({ order }: { order: Order }) {
-  return <div className="order-header"><div><p className="eyebrow">Accession {order.accession_no}</p><h1>{order.patient_name}</h1><p>{[order.uhid && `UHID ${order.uhid}`, order.age_years !== null && order.age_years !== undefined ? `${order.age_years}y` : '', order.gender, order.mobile].filter(Boolean).join(' · ')}</p></div><div className="order-meta"><Status value={order.sample_status || 'REGISTERED'} /><Status value={order.status} /><span>Sample: {formatDate(order.sample_date, true)}</span><span>{order.referring_doctor || 'No referring doctor'}</span></div></div>;
+  return <div className="order-header"><div><p className="eyebrow">Accession {order.accession_no}</p><h1>{order.patient_name}</h1><p>{[order.uhid && `UHID ${order.uhid}`, formatAge(order), order.gender, order.mobile].filter(Boolean).join(' · ')}</p></div><div className="order-meta"><Status value={order.sample_status || 'REGISTERED'} /><Status value={order.status} /><span>Sample: {formatDate(order.sample_date, true)}</span><span>{order.referring_doctor || 'No referring doctor'}</span></div></div>;
 }
 
-export function ResultEntry({ order, user, onUpdated, onReport }: { order: Order | null; user: User; onUpdated: (order: Order) => void; onReport: () => void }) {
+export function ResultEntry({ order, user, onUpdated, onReport, onDeleted }: { order: Order | null; user: User; onUpdated: (order: Order) => void; onReport: () => void; onDeleted: () => void }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
@@ -150,7 +151,7 @@ export function ResultEntry({ order, user, onUpdated, onReport }: { order: Order
   async function startProcessing() {
     if (!detailed) return;
     setBusy(true); setError(''); setMessage('');
-    try { const updated = await api<Order>(`/orders/${detailed.id}/start-processing`, { method: 'POST' }); onUpdated(updated); setMessage('Sample marked in process.'); }
+    try { const updated = await api<Order>(`/orders/${detailed.id}/prepare-entry`, { method: 'POST' }); onUpdated(updated); setMessage('Sample accepted and ready for result entry.'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not start processing.'); }
     finally { setBusy(false); }
   }
@@ -203,10 +204,11 @@ export function ResultEntry({ order, user, onUpdated, onReport }: { order: Order
   const editingLocked = locked || !canEdit || sampleNotAccepted || sampleNeedsProcessing;
   return <section className="page result-page">
     <Header order={detailed} />
+    <OrderActions key={detailed.id} order={detailed} user={user} onUpdated={onUpdated} onDeleted={onDeleted} hasUnsaved={detailed.tests.some((test) => test.results.some((r) => (values[r.id] ?? r.result_value ?? '') !== (r.result_value || '') || (comments[r.id] ?? r.comments ?? '') !== (r.comments || '')))} />
     {detailed.tests.length > 1 && <label className="investigation-jump"><span>Go to investigation</span><select value={jumpTestId} onChange={(event) => jumpToInvestigation(event.target.value)}><option value="">Choose a test panel…</option>{detailed.tests.map((test) => <option key={test.id} value={test.id}>{test.profile_code} — {test.profile_name} ({test.status.toLowerCase()})</option>)}</select></label>}
-    <div className="entry-toolbar"><div><strong>Rapid entry</strong><span>Type a value, press ↓ or Enter for the next field, ↑ for the previous field, and use +/− to adjust numeric results · Ctrl+S saves</span></div><div className="toolbar-actions">{canEdit && detailed.sample_status === 'COLLECTED' && <button className="secondary" onClick={() => void startProcessing()} disabled={busy}>Start processing</button>}{!editingLocked && <label className="file-button">Import analyzer CSV<input type="file" accept=".csv,.txt" onChange={importCsv} /></label>}<button className="secondary" onClick={onReport}>Report preview</button>{!editingLocked && <button onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save results'}</button>}{canAuthorize && detailed.status === 'COMPLETED' && <button className="authorize" onClick={() => void authorize()} disabled={busy}>Authorize report</button>}{canAuthorize && locked && <button className="secondary" onClick={() => setShowAmendment((visible) => !visible)} disabled={busy}>Amend report</button>}</div></div>
+    <div className="entry-toolbar"><div><strong>Rapid entry</strong><span>Type a value, press ↓ or Enter for the next field, ↑ for the previous field, and use +/− to adjust numeric results · Ctrl+S saves</span></div><div className="toolbar-actions">{canEdit && ['REGISTERED', 'COLLECTED'].includes(detailed.sample_status || '') && <button className="secondary" onClick={() => void startProcessing()} disabled={busy}>{detailed.sample_status === 'REGISTERED' ? 'Accept sample & enter values' : 'Start processing'}</button>}{!editingLocked && <label className="file-button">Import analyzer CSV<input type="file" accept=".csv,.txt" onChange={importCsv} /></label>}<button className="secondary" onClick={onReport}>Report preview</button>{!editingLocked && <button onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save results'}</button>}{canAuthorize && detailed.status === 'COMPLETED' && <button className="authorize" onClick={() => void authorize()} disabled={busy}>Authorize report</button>}{canAuthorize && locked && <button className="secondary" onClick={() => setShowAmendment((visible) => !visible)} disabled={busy}>Amend report</button>}</div></div>
     {message && <p className="success-message">{message}</p>}{error && <p className="form-error">{error}</p>}
-    {sampleNotAccepted && <p className="notice">Accept this sample from the worklist before entering or importing results.</p>}
+    {sampleNotAccepted && <p className="notice">Choose Accept sample & enter values above to record sample acceptance and unlock result entry.</p>}
     {sampleNeedsProcessing && <p className="notice workflow-notice"><strong>Next step:</strong> confirm that testing has started, then choose <strong>Start processing</strong> to unlock manual entry and analyzer import.</p>}
     {criticalResults.length > 0 && <section className="critical-alert" role="alert"><strong>Critical value alert</strong><span>{criticalResults.map((result) => `${result.name}: ${result.value}${result.unit ? ` ${result.unit}` : ''} (${result.flag === 'CL' ? 'critical low' : 'critical high'})`).join(' · ')}</span><small>Follow your laboratory’s approved critical-result notification SOP before authorization.</small></section>}
     {locked && <p className="notice">This report was authorized by {detailed.authorized_by_name || 'an authorizer'} and is now read-only. Use Amend report to create a controlled correction.</p>}
@@ -224,6 +226,6 @@ function TestEntry({ test, order, values, comments, valueErrors, locked, onChang
     const flag = result.calculation_formula ? result.abnormal_flag : resultFlag(value, result, order);
     const flagLabel = flag === 'CH' ? 'CRIT HIGH' : flag === 'CL' ? 'CRIT LOW' : flag === 'H' ? 'HIGH' : flag === 'L' ? 'LOW' : '—';
     const validationError = valueErrors[result.id];
-    return <div className={`result-grid result-row ${validationError ? 'invalid' : ''} ${flag === 'CL' || flag === 'CH' ? 'critical' : flag ? 'abnormal' : ''}`} key={result.id}><label><strong>{result.parameter_name}</strong><small>{result.calculation_formula ? `Calculated: ${result.calculation_formula}` : result.parameter_code}</small></label><div onKeyDown={onEnter}><InputForResult result={result} value={value} locked={locked} autoFocus={index === 0} onChange={(next) => onChange(result.id, next)} />{validationError && <small className="result-validation" role="alert">{validationError}</small>}</div><span>{result.unit || '—'}</span><span>{referenceText(result.reference_ranges, order)}</span><input aria-label={`${result.parameter_name} remarks`} disabled={locked || Boolean(result.calculation_formula)} maxLength={400} value={comments[result.id] || ''} onChange={(event) => onCommentChange(result.id, event.target.value)} placeholder="Optional" /><span className={`flag flag-${flag || 'normal'}`}>{flag ? <strong>{flagLabel}</strong> : '—'}</span></div>;
+    return <div className={`result-grid result-row ${validationError ? 'invalid' : ''} ${flag === 'CL' || flag === 'CH' ? 'critical' : flag ? 'abnormal' : ''}`} key={result.id}><label><strong>{result.parameter_name}</strong><small>{result.calculation_formula ? `Calculated: ${result.calculation_formula}` : result.parameter_code}</small></label><div onKeyDown={onEnter}><InputForResult result={result} value={value} locked={locked} autoFocus={index === 0} onChange={(next) => onChange(result.id, next)} />{validationError && <small className="result-validation" role="alert">{validationError}</small>}</div><span>{result.unit || '—'}</span><span className="entry-reference">{referenceText(result.reference_ranges, order)}{result.reference_note && <small>{result.reference_note}</small>}</span><input aria-label={`${result.parameter_name} remarks`} disabled={locked || Boolean(result.calculation_formula)} maxLength={400} value={comments[result.id] || ''} onChange={(event) => onCommentChange(result.id, event.target.value)} placeholder="Optional" /><span className={`flag flag-${flag || 'normal'}`}>{flag ? <strong>{flagLabel}</strong> : '—'}</span></div>;
   })}</section>;
 }

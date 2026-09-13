@@ -1,3 +1,7 @@
+-- Bootstrap only: administrator edits, blanks, archives and renamed codes survive restarts.
+DO $catalogue_seed$
+BEGIN
+  IF EXISTS (SELECT 1 FROM test_profiles) THEN RETURN; END IF;
 INSERT INTO test_profiles (code, name, department) VALUES
   ('CBC', 'Complete Blood Count', 'Hematology'),
   ('LFT', 'Liver Function Test', 'Biochemistry'),
@@ -159,11 +163,6 @@ END
 FROM test_profiles tp
 WHERE pp.profile_id = tp.id AND pp.method IS NULL;
 
-UPDATE test_results tr
-SET method = pp.method
-FROM profile_parameters pp
-WHERE tr.parameter_id = pp.id AND tr.method IS NULL;
-
 UPDATE test_profiles
 SET specimen_type = CASE code
   WHEN 'CBC' THEN 'EDTA whole blood'
@@ -175,3 +174,6 @@ SET specimen_type = CASE code
   ELSE 'Serum'
 END
 WHERE specimen_type IS NULL;
+
+END
+$catalogue_seed$;

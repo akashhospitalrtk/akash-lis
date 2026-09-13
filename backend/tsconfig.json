@@ -8,12 +8,11 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "allowJs": true,
-    "checkJs": false,
+    "allowJs": false,
     "resolveJsonModule": true,
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.js", "generated/**/*.ts", "prisma.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "generated/**/*.ts", "prisma.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

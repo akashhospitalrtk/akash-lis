@@ -1,6 +1,7 @@
+import { Fragment } from 'react';
 import { useState } from 'react';
 import { api } from '../api';
-import { formatDate, isDetailOrder, referenceText } from '../lib';
+import { formatAge, formatDate, isDetailOrder, referenceText } from '../lib';
 import type { Hospital, Order, User } from '../types';
 
 function BrandMark() {
@@ -18,12 +19,24 @@ function LocationIcon() {
 export function Report({ order, hospital, user, onUpdated, onBack }: { order: Order | null; hospital: Hospital; user: User; onUpdated: (order: Order) => void; onBack: () => void }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showAmendment, setShowAmendment] = useState(false);
+  const [amendmentReason, setAmendmentReason] = useState('');
   const detailed = isDetailOrder(order) ? order : null;
   if (!detailed) return <section className="page empty-state"><h1>No report selected</h1><p>Open an order from the worklist first.</p></section>;
 
   const canPrint = (user.role === 'ADMIN' || user.role === 'AUTHORIZER') && detailed.status === 'AUTHORIZED';
   const canDeliver = canPrint && detailed.sample_status !== 'DELIVERED';
   const amendmentNo = Number(detailed.amendment_count || 0);
+
+  async function amendAndEdit() {
+    if (!detailed) return;
+    setBusy(true); setError('');
+    try {
+      const updated = await api<Order>(`/orders/${detailed.id}/amend`, { method: 'POST', body: JSON.stringify({ reason: amendmentReason.trim() }) });
+      onUpdated(updated); onBack();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not open amendment.'); }
+    finally { setBusy(false); }
+  }
 
   async function print() {
     if (!canPrint || !detailed) return;
@@ -56,13 +69,15 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
 
   return <section className="page report-page">
     <div className="report-actions">
-      <button className="secondary" onClick={onBack}>Back to entry</button>
+      <button className="secondary" onClick={onBack}>{detailed.status !== 'AUTHORIZED' && ['ADMIN', 'TECHNICIAN'].includes(user.role) ? 'Edit values' : 'Back to entry'}</button>
+      {detailed.status === 'AUTHORIZED' && ['ADMIN', 'AUTHORIZER'].includes(user.role) && <button className="secondary" disabled={busy} onClick={() => setShowAmendment(true)}>Amend &amp; edit values</button>}
       <span>{detailed.status === 'AUTHORIZED' ? amendmentNo ? `Authorized amended report - Revision ${amendmentNo}` : 'Authorized report' : amendmentNo ? `Amendment ${amendmentNo} is awaiting authorization.` : 'Preview only - authorization is required before printing.'}</span>
       {canDeliver && <button className="secondary" onClick={() => void deliver()} disabled={busy}>Mark delivered</button>}
       {canPrint && <button onClick={() => void print()} disabled={busy}>{busy ? 'Recording...' : 'Print / Save PDF'}</button>}
     </div>
     {error && <p className="form-error">{error}</p>}
 
+    {showAmendment && <form className="amendment-panel" onSubmit={(event) => { event.preventDefault(); void amendAndEdit(); }}><h2>Amend report to edit values</h2><p>The authorized version is preserved. Corrected results must be saved and authorized again.</p><label className="field"><span>Amendment reason *</span><textarea required minLength={5} maxLength={500} value={amendmentReason} onChange={(event) => setAmendmentReason(event.target.value)} /></label><div className="toolbar-actions"><button type="button" className="secondary" disabled={busy} onClick={() => setShowAmendment(false)}>Cancel</button><button disabled={busy}>Begin amendment &amp; edit</button></div></form>}
     <article className="report-sheet">
       <header className="report-header">
         <div className="report-brand">
@@ -86,7 +101,7 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
       <section className="report-patient" aria-label="Patient and sample details">
         <div className="report-patient-primary"><span>Patient name</span><strong>{detailed.patient_name}</strong></div>
         <div><span>UHID / Registration no.</span><strong>{detailed.uhid || '-'}</strong></div>
-        <div><span>Age / Gender</span><strong>{[detailed.age_years !== null && detailed.age_years !== undefined ? `${detailed.age_years} years` : '', detailed.gender].filter(Boolean).join(' / ') || '-'}</strong></div>
+        <div><span>Age / Gender</span><strong>{[formatAge(detailed), detailed.gender].filter(Boolean).join(' / ') || '-'}</strong></div>
         <div><span>Referring doctor</span><strong>{detailed.referring_doctor || '-'}</strong></div>
         <div><span>Registered</span><strong>{formatDate(detailed.created_at, true)}</strong></div>
         <div><span>Sample collected</span><strong>{formatDate(detailed.sample_date, true)}</strong></div>
@@ -104,15 +119,16 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
             <tbody>{test.results.map((result) => {
               const flag = result.abnormal_flag || 'Normal';
               const critical = Boolean(result.abnormal_flag?.startsWith('C'));
-              return <tr key={result.id} className={result.abnormal_flag ? `report-abnormal${critical ? ' report-critical' : ''}` : ''}>
+              return <Fragment key={result.id}><tr className={result.abnormal_flag ? `report-abnormal${critical ? ' report-critical' : ''}` : ''}>
                 <td><strong>{result.parameter_name}</strong>{result.method && <small className="report-method">Method: {result.method}</small>}</td>
                 <td><strong>{result.result_value || '-'}</strong></td>
                 <td>{result.unit || '-'}</td>
-                <td>{referenceText(result.reference_ranges, detailed)}</td>
+                <td>{referenceText(result.reference_ranges, detailed)}{result.reference_note && <small className="report-reference-note">{result.reference_note}</small>}</td>
                 <td><span className={`report-flag ${result.abnormal_flag ? 'report-flag-abnormal' : ''}`}>{flag}</span></td>
-              </tr>;
+              </tr>{result.description && <tr className="report-description-row"><td colSpan={5}><div className="report-description">{result.description}</div></td></tr>}</Fragment>;
             })}</tbody>
           </table>
+          {test.description && <div className="report-description report-panel-description"><strong>Clinical notes</strong><p>{test.description}</p></div>}
           {remarks && <div className="report-remarks"><strong>Remarks</strong><p>{remarks}</p></div>}
         </section>;
       })}

@@ -2,9 +2,10 @@ FROM node:22-alpine AS build
 WORKDIR /app
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=$VITE_API_URL
-COPY frontend/package.json ./
-RUN npm install
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 COPY frontend/ ./
+COPY docs/catalogue-setup.md /docs/catalogue-setup.md
 RUN npm run build
 
 FROM nginx:1.27-alpine

@@ -12,8 +12,8 @@
     "prisma:introspect": "prisma db pull",
     "prisma:validate": "prisma validate",
     "prisma:check": "tsx src/scripts/checkPrisma.ts",
-    "migrate": "node src/scripts/migrate.js",
-    "seed": "node src/scripts/seed.js"
+    "migrate": "tsx src/scripts/migrate.ts",
+    "seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

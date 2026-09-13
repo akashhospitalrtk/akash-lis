@@ -1,3 +1,8 @@
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number, public readonly code?: string, public readonly details?: { path: string; message: string }[]) {
+    super(message); this.name = 'ApiError';
+  }
+}
 const baseUrl = import.meta.env.VITE_API_URL || '/api';
 
 export function getToken() { return localStorage.getItem('lis_token'); }
@@ -10,8 +15,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const response = await fetch(`${baseUrl}${path}`, { ...options, headers });
+  if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.message || `Request failed (${response.status})`);
+  if (!response.ok) throw new ApiError(body.message || `Request failed (${response.status})`, response.status, body.code, body.details);
+  if (body.success === true && 'data' in body) return body.data as T;
+  // Permit an older API during a rolling local restart.
   return body as T;
 }
 
@@ -20,7 +28,7 @@ export async function download(path: string, fallbackFilename: string) {
   const response = await fetch(`${baseUrl}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.message || `Download failed (${response.status})`);
+    throw new ApiError(body.message || `Download failed (${response.status})`, response.status, body.code, body.details);
   }
   const filename = response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/i)?.[1] || fallbackFilename;
   const url = URL.createObjectURL(await response.blob());
