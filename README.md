@@ -2,6 +2,8 @@
 
 A deliberately small Laboratory Information System for a low-volume hospital laboratory. It supports quick registration, profile-based test ordering, keyboard-friendly result entry, authorization, audit history, a daily worklist, and clean A4 reports.
 
+See [the architecture and directory guide](docs/architecture.md) for routes/controllers/services, shared errors and responses, database versus frontend seed data, Docker integration, and type-safety limits. Registration also supports **Submit & enter values**; reports support editing through the amendment workflow when authorized. Browser Back/Forward and reload restore the current page and saved order.
+
 ## Workflow and data model
 
 `Registration → order tests → enter/review results → authorize → print`
@@ -106,7 +108,7 @@ PostgreSQL can be managed with pgAdmin, the `psql` command-line tool, or a Postg
 
 5. Open the Vite URL, usually `http://localhost:5173`, and create the first administrator from the setup screen.
 
-To verify the backend before opening the frontend, visit `http://localhost:4000/api/health`. A working setup returns `{"status":"ok","database":"connected"}`.
+To verify the backend before opening the frontend, visit `http://localhost:4000/api/health` (standalone development) or `http://localhost:4044/api/health` (Docker). A working setup returns `{"success":true,"message":"Success","data":{"status":"ok","database":"connected"}}`.
 
 ### Using pgAdmin
 
@@ -130,7 +132,7 @@ You do not need to create LIS tables manually. `npm run migrate` creates the tab
 - Backup: `docker compose exec -T db pg_dump -U lis lis > lis-backup.sql`
 - Restore: `Get-Content lis-backup.sql | docker compose exec -T db psql -U lis lis`
 - Environment values: edit `backend/.env` for database/JWT/hospital details and optional external patient lookup. Rebuild after changing frontend build-time variables.
-- Health checks: backend `http://localhost:4000/api/health`; frontend `http://localhost:8080/health`.
+- Docker health checks: backend `http://localhost:4044/api/health`; frontend `http://localhost:8080/health` (use the root `.env` `FRONTEND_PORT` override if set, currently 8081 locally).
 
 ## External patient lookup
 

@@ -1,4 +1,4 @@
-import type { Order, ReferenceRange, Result } from './types';
+import type { Order, OrderTest, ReferenceRange, Result } from './types';
 
 export function formatDate(value?: string | null, withTime = false) {
   if (!value) return '—';
@@ -48,7 +48,7 @@ export function isDetailOrder(order: Order | null): order is Order & { tests: Re
   return Boolean(order && Array.isArray(order.tests));
 }
 
-export interface ResultTest { description?: string | null; id: string; profile_id: string; profile_code: string; profile_name: string; status: string; remarks?: string | null; sort_order: number; results: Result[] }
+export type ResultTest = OrderTest;
 
 export function roleLabel(role: string) {
   return { ADMIN: 'Administrator', TECHNICIAN: 'Lab technician', AUTHORIZER: 'Report authorizer' }[role] || role;

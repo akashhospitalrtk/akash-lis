@@ -92,7 +92,7 @@ export default function App() {
     {appError && <div className="app-error">{appError}<button onClick={() => setAppError('')}>×</button></div>}
     <main>
       {['exports', 'catalogue', 'users'].includes(page) && user.role !== 'ADMIN' && <section className="page empty-state"><h1>Administrator access required</h1><button onClick={() => setPage('worklist')}>Go to samples</button></section>}
-      {orderLoading && <p className="page loading">Loading selected order?</p>}
+      {orderLoading && <p className="page loading">Loading selected order…</p>}
       {page === 'worklist' && <Worklist onOpen={openOrder} reloadKey={worklistVersion} user={user} />}
       {page === 'register' && <RegisterOrder profiles={profiles} onCreated={created} />}
       {page === 'entry' && !orderLoading && <ResultEntry key={orderId || 'no-order'} onDeleted={() => { setSelectedOrder(null); setWorklistVersion((v) => v + 1); setPage('worklist'); }} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} user={user} onUpdated={updateOrder} onReport={() => setPage('report')} />}

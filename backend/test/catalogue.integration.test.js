@@ -38,8 +38,8 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
   t.after(async () => { await new Promise((resolve) => server.close(resolve)); await pool.end(); });
   async function request(path, method = 'GET', body, auth = token) {
     const response = await fetch(`${base}/api${path}`, { method, headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
-    const body = await response.json().catch(() => null);
-    return { status: response.status, body: body?.success === true ? body.data : body };
+    const responseBody = await response.json().catch(() => null);
+    return { status: response.status, body: responseBody?.success === true ? responseBody.data : responseBody };
   }
   let profiles = (await request('/catalogue/profiles')).body;
   let lft = profiles.find((p) => p.code === 'LFT');
