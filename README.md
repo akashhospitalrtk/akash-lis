@@ -4,6 +4,8 @@ A deliberately small Laboratory Information System for a low-volume hospital lab
 
 See [the architecture and directory guide](docs/architecture.md) for routes/controllers/services, shared errors and responses, database versus frontend seed data, Docker integration, and type-safety limits. Registration also supports **Submit & enter values**; reports support editing through the amendment workflow when authorized. Browser Back/Forward and reload restore the current page and saved order.
 
+Doctors can use **Patients** to search hospital-wide, check order status, view published results, print/download PDF reports and append attributed clinical notes that appear on reports. Administrators and hospital IT manage staff roles and departments through **Team**. See [doctor access and staff administration](docs/doctor-access.md) for permissions, deployment and the end-to-end workflow.
+
 ## Workflow and data model
 
 `Registration → order tests → enter/review results → authorize → print`

@@ -1,9 +1,11 @@
-export type Role = 'ADMIN' | 'TECHNICIAN' | 'AUTHORIZER';
+export type Role = 'ADMIN' | 'IT' | 'DOCTOR' | 'TECHNICIAN' | 'AUTHORIZER';
 export type ResultKind = 'NUMERIC' | 'TEXT' | 'POS_NEG' | 'SELECT';
 export type OrderStatus = 'PENDING' | 'COMPLETED' | 'AUTHORIZED';
 export type SampleStatus = 'REGISTERED' | 'COLLECTED' | 'IN_PROCESS' | 'RESULTS_PENDING' | 'APPROVED' | 'DELIVERED';
 
-export interface User { id: string; username: string; fullName: string; role: Role; designation?: string | null }
+export interface Department { id: string; name: string }
+export interface User { id: string; username: string; fullName: string; role: Role; designation?: string | null; departments?: Department[]; permissions?: string[] }
+export interface ClinicalNote { id: string; author_id: string; author_name: string; author_designation?: string | null; body: string; created_at: string }
 export interface ProfileParameter {
   id: string; profile_id: string; code: string; name: string; result_kind: ResultKind; unit?: string | null;
   description?: string | null; method?: string | null; loinc_code?: string | null; reference_note?: string | null;
@@ -29,6 +31,7 @@ export interface ReportAmendment {
   started_by_name?: string | null; reauthorized_by_name?: string | null;
 }
 export interface Order {
+  clinical_notes?: ClinicalNote[];
   id: string; accession_no: string; patient_source: string; external_patient_id?: string | null; uhid?: string | null;
   patient_name: string; age_value?: number | null; age_unit?: AgeUnit; age_years?: number | null; gender?: string | null; mobile?: string | null; referring_doctor?: string | null;
   patient_type?: string | null; sample_date: string; status: OrderStatus; sample_status?: SampleStatus; sample_received_at?: string | null; delivered_at?: string | null; created_at: string; printed_at?: string | null;

@@ -17,7 +17,7 @@ export function SetupScreen({ onSuccess }: { onSuccess: (user: User) => void }) 
       setToken(session.token); onSuccess(session.user);
     } catch (reason) { setError(submitError(reason)); } finally { setBusy(false); }
   }
-  return <main className="auth-shell"><section className="auth-card"><p className="eyebrow">First-time setup</p><h1>Create the laboratory administrator</h1><p className="muted">This account can create technician and authorizer accounts later.</p>
+  return <main className="auth-shell"><section className="auth-card"><p className="eyebrow">First-time setup</p><h1>Create the laboratory administrator</h1><p className="muted">This account manages staff roles and departments, including doctors, technicians, authorizers and hospital IT.</p>
     <form onSubmit={submit} className="stack"><Field label="Full name" autoFocus value={form.fullName} onChange={(fullName) => setForm({ ...form, fullName })} /><Field label="Username" value={form.username} onChange={(username) => setForm({ ...form, username })} /><Field label="Password" type="password" hint="At least 8 characters" value={form.password} onChange={(password) => setForm({ ...form, password })} /><Field label="Designation" value={form.designation} onChange={(designation) => setForm({ ...form, designation })} /><Field label="Report signature label (optional)" value={form.signatureLabel} onChange={(signatureLabel) => setForm({ ...form, signatureLabel })} />
       {error && <p className="form-error">{error}</p>}<button disabled={busy}>{busy ? 'Creating account…' : 'Create administrator'}</button>
     </form></section></main>;

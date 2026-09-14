@@ -8,6 +8,12 @@ const baseUrl = import.meta.env.VITE_API_URL || '/api';
 export function getToken() { return localStorage.getItem('lis_token'); }
 export function setToken(token: string) { localStorage.setItem('lis_token', token); }
 export function clearToken() { localStorage.removeItem('lis_token'); }
+function handleExpiredSession(response: Response) {
+  if (response.status === 401 && getToken()) {
+    clearToken();
+    window.dispatchEvent(new Event('lis-session-expired'));
+  }
+}
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
@@ -15,6 +21,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const response = await fetch(`${baseUrl}${path}`, { ...options, headers });
+  handleExpiredSession(response);
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new ApiError(body.message || `Request failed (${response.status})`, response.status, body.code, body.details);
@@ -26,6 +33,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 export async function download(path: string, fallbackFilename: string) {
   const token = getToken();
   const response = await fetch(`${baseUrl}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  handleExpiredSession(response);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new ApiError(body.message || `Download failed (${response.status})`, response.status, body.code, body.details);

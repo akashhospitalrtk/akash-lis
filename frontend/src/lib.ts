@@ -51,7 +51,7 @@ export function isDetailOrder(order: Order | null): order is Order & { tests: Re
 export type ResultTest = OrderTest;
 
 export function roleLabel(role: string) {
-  return { ADMIN: 'Administrator', TECHNICIAN: 'Lab technician', AUTHORIZER: 'Report authorizer' }[role] || role;
+  return { ADMIN: 'Administrator', IT: 'Hospital IT', DOCTOR: 'Doctor', TECHNICIAN: 'Lab technician', AUTHORIZER: 'Report authorizer' }[role] || role;
 }
 
 export function formatAge(order: Pick<Order, 'age_value' | 'age_unit' | 'age_years'>) {

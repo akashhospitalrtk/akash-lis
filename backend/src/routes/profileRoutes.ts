@@ -7,7 +7,7 @@ import * as controller from '../controllers/profileController.js';
 
 export const profileRoutes = Router();
 profileRoutes.get('/catalogue/descriptions', authenticate, allowRoles('ADMIN'), controller.descriptions);
-profileRoutes.get('/profiles', authenticate, controller.activeProfiles);
+profileRoutes.get('/profiles', authenticate, allowRoles('ADMIN', 'TECHNICIAN', 'AUTHORIZER'), controller.activeProfiles);
 profileRoutes.get('/catalogue/profiles', authenticate, allowRoles('ADMIN'), controller.catalogueProfiles);
 profileRoutes.get('/catalogue/profiles/:id/audit', authenticate, allowRoles('ADMIN'), validateParams(idParamsSchema), controller.profileAudit);
 profileRoutes.post('/catalogue/profiles', authenticate, allowRoles('ADMIN'), validate(profileSchema), controller.createProfile);

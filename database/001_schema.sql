@@ -3,6 +3,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 DO $$ BEGIN
   CREATE TYPE user_role AS ENUM ('ADMIN', 'TECHNICIAN', 'AUTHORIZER');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'DOCTOR';
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'IT';
 DO $$ BEGIN
   CREATE TYPE result_kind AS ENUM ('NUMERIC', 'TEXT', 'POS_NEG', 'SELECT');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -32,6 +34,18 @@ CREATE TABLE IF NOT EXISTS test_profiles (
   instructions VARCHAR(500),
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS departments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(80) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS departments_name_unique ON departments(lower(name));
+CREATE TABLE IF NOT EXISTS user_departments (
+  user_id UUID NOT NULL REFERENCES users(id),
+  department_id UUID NOT NULL REFERENCES departments(id),
+  PRIMARY KEY (user_id, department_id)
 );
 
 CREATE TABLE IF NOT EXISTS profile_parameters (
@@ -244,3 +258,14 @@ ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS age_unit VARCHAR(10) NOT NULL DE
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES users(id);
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
+
+CREATE TABLE IF NOT EXISTS clinical_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id UUID NOT NULL REFERENCES lab_orders(id),
+  author_id UUID NOT NULL REFERENCES users(id),
+  author_name VARCHAR(120) NOT NULL,
+  author_designation VARCHAR(120),
+  body VARCHAR(5000) NOT NULL CHECK (length(trim(body)) > 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS clinical_notes_order_idx ON clinical_notes(order_id, created_at, id);

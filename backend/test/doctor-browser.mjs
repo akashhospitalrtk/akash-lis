@@ -1,0 +1,110 @@
+import express from 'express';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createApp } from '../dist/src/app.js';
+import { pool } from '../dist/src/database/pool.js';
+import { config } from '../dist/src/config/env.js';
+
+const db = new URL(config.databaseUrl);
+assert.ok(['127.0.0.1', 'localhost'].includes(db.hostname) && db.pathname.endsWith('_test'), 'Disposable local test database only.');
+const { chromium } = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH || 'D:/pharmacy-on/node_modules/playwright-core/index.mjs').href);
+await pool.query(await fs.readFile(new URL('../../database/001_schema.sql', import.meta.url), 'utf8'));
+await pool.query(await fs.readFile(new URL('../../database/002_seed_profiles.sql', import.meta.url), 'utf8'));
+const apiApp = createApp();
+const app = express();
+app.use((req, res, next) => req.path.startsWith('/api/') ? apiApp(req, res, next) : next());
+app.use(express.static(fileURLToPath(new URL('../../frontend/dist', import.meta.url))));
+app.get('*', (_req, res) => res.sendFile(fileURLToPath(new URL('../../frontend/dist/index.html', import.meta.url))));
+const server = app.listen(0, '127.0.0.1'); await new Promise((resolve) => server.once('listening', resolve));
+const base = `http://127.0.0.1:${server.address().port}`;
+const browser = await chromium.launch({ headless: true });
+const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const doctorContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const itContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const adminPage = await adminContext.newPage(); const doctorPage = await doctorContext.newPage(); const itPage = await itContext.newPage();
+const errors = [];
+for (const page of [adminPage, doctorPage, itPage]) { page.setDefaultTimeout(15000); page.on('pageerror', (error) => errors.push(error.message)); }
+const password = 'Synthetic-browser-only-123';
+await fs.mkdir(new URL('../test-results/', import.meta.url), { recursive: true });
+async function api(path, method, body, token) {
+  const response = await fetch(`${base}/api${path}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const value = await response.json().catch(() => null); assert.ok(response.ok, JSON.stringify(value)); return value?.data;
+}
+async function login(page, username) {
+  await page.goto(base); await page.getByLabel('Username', { exact: true }).fill(username); await page.getByLabel('Password', { exact: true }).fill(password); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+}
+try {
+  const session = await api('/auth/bootstrap', 'POST', { username: 'browser_admin', fullName: 'Browser Admin', password });
+  await login(adminPage, 'browser_admin');
+  await adminPage.getByRole('button', { name: 'Staff and departments', exact: true }).click();
+  await adminPage.getByLabel('New department', { exact: true }).fill('Medicine'); await adminPage.getByRole('button', { name: 'Add department', exact: true }).click();
+  await adminPage.getByText('Department created.', { exact: true }).waitFor();
+  await adminPage.getByLabel('Full name', { exact: true }).fill('Dr Browser');
+  await adminPage.getByLabel('Username', { exact: true }).fill('browser_doctor');
+  await adminPage.getByLabel('Initial password', { exact: true }).fill(password);
+  await adminPage.getByLabel('Role', { exact: true }).selectOption('DOCTOR');
+  await adminPage.getByLabel('Medicine', { exact: true }).check();
+  await adminPage.getByLabel('Designation', { exact: true }).fill('Consultant');
+  await adminPage.getByRole('button', { name: 'Create user', exact: true }).click();
+  await adminPage.getByRole('button', { name: 'Edit Dr Browser', exact: true }).waitFor();
+  await adminPage.screenshot({ path: fileURLToPath(new URL('../test-results/doctor-staff-admin.png', import.meta.url)), fullPage: true });
+  const staff = await api('/users', 'GET', undefined, session.token);
+  const doctor = staff.find((u) => u.username === 'browser_doctor'); assert.equal(doctor.departments[0].name, 'Medicine');
+  await api('/users', 'POST', { username: 'browser_it', fullName: 'Browser IT', password, role: 'IT' }, session.token);
+  const profiles = await api('/profiles', 'GET', undefined, session.token);
+  const order = await api('/orders', 'POST', { patientName: 'Browser Synthetic Patient', uhid: 'BROWSER-001', ageValue: 30, ageUnit: 'years', gender: 'Female', sampleDate: new Date().toISOString(), profileIds: [profiles.find((p) => p.code === 'UPT').id], entryMode: 'RESULTS' }, session.token);
+  await api(`/orders/${order.id}/results`, 'PUT', { results: [{ id: order.tests[0].results[0].id, value: 'Negative' }] }, session.token);
+  await login(doctorPage, 'browser_doctor');
+  await doctorPage.getByRole('heading', { name: 'Patients & report status' }).waitFor();
+  assert.equal(await doctorPage.getByRole('button', { name: 'Staff and departments' }).count(), 0);
+  await doctorPage.getByLabel('Find patient or report').fill('BROWSER-001');
+  await doctorPage.getByRole('button', { name: 'View patient' }).click();
+  await doctorPage.getByRole('heading', { name: 'Browser Synthetic Patient' }).waitFor();
+  assert.equal(await doctorPage.getByRole('button', { name: 'View results & report' }).isDisabled(), true);
+  assert.equal(await doctorPage.getByText('Negative', { exact: true }).count(), 0);
+  await doctorPage.getByLabel('Add clinical note').fill('Follow-up arranged. पुनः जाँच। μmol/L. <script>window.noteInjected=true</script>');
+  await doctorPage.getByRole('button', { name: 'Add note to report', exact: true }).click();
+  await doctorPage.getByRole('status').filter({ hasText: 'Clinical note added' }).waitFor();
+  assert.equal(await doctorPage.evaluate(() => window.noteInjected), undefined);
+  await api(`/orders/${order.id}/authorize`, 'POST', undefined, session.token);
+  await doctorPage.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await doctorPage.getByText('Published', { exact: true }).waitFor();
+  await doctorPage.screenshot({ path: fileURLToPath(new URL('../test-results/doctor-patient.png', import.meta.url)), fullPage: true });
+  await doctorPage.getByRole('button', { name: 'View results & report' }).click();
+  await doctorPage.locator('.report-sheet').waitFor();
+  assert.equal(await doctorPage.getByRole('button', { name: 'Amend & edit values' }).count(), 0);
+  assert.equal(await doctorPage.getByRole('button', { name: 'Mark delivered' }).count(), 0);
+  assert.ok(await doctorPage.locator('.report-doctor-notes').innerText().then((text) => text.includes('Dr Browser') && text.includes('Follow-up arranged.')));
+  const downloaded = doctorPage.waitForEvent('download'); await doctorPage.getByRole('button', { name: 'Download PDF', exact: true }).click();
+  const file = await downloaded; assert.match(file.suggestedFilename(), /\.pdf$/); await file.saveAs(fileURLToPath(new URL('../test-results/doctor-browser-report.pdf', import.meta.url)));
+  await doctorPage.evaluate(() => { window.print = () => { window.printCalls = (window.printCalls || 0) + 1; }; });
+  await doctorPage.getByRole('button', { name: 'Print report', exact: true }).click();
+  await doctorPage.waitForFunction(() => window.printCalls === 1);
+  await doctorPage.screenshot({ path: fileURLToPath(new URL('../test-results/doctor-report-screen.png', import.meta.url)), fullPage: true });
+  await doctorPage.reload(); await doctorPage.locator('.report-sheet').waitFor();
+  await doctorPage.getByRole('button', { name: 'Back to patient' }).click(); await doctorPage.getByRole('heading', { name: 'Patient & order' }).waitFor();
+  await doctorPage.goBack(); await doctorPage.locator('.report-sheet').waitFor();
+  await doctorPage.goForward(); await doctorPage.getByRole('heading', { name: 'Patient & order' }).waitFor();
+  await doctorPage.setViewportSize({ width: 390, height: 844 });
+  assert.ok(await doctorPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await doctorPage.screenshot({ path: fileURLToPath(new URL('../test-results/doctor-mobile.png', import.meta.url)), fullPage: true });
+  await doctorPage.goto(`${base}/register`); await doctorPage.getByRole('heading', { name: 'Patients & report status' }).waitFor();
+  await login(itPage, 'browser_it'); await itPage.getByRole('heading', { name: 'Staff & departments' }).waitFor();
+  assert.equal(await itPage.getByRole('button', { name: 'Patients and report status' }).count(), 0);
+  assert.equal(await itPage.getByLabel('Role', { exact: true }).locator('option[value="ADMIN"]').count(), 0);
+  await itPage.getByRole('button', { name: 'Edit Dr Browser' }).click();
+  await itPage.getByLabel('Account active', { exact: true }).uncheck(); await itPage.getByRole('button', { name: 'Save access', exact: true }).click();
+  await itPage.getByRole('status').filter({ hasText: 'Staff access updated' }).waitFor();
+  await doctorPage.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await doctorPage.getByRole('heading', { name: 'Welcome back' }).waitFor();
+  assert.deepEqual(errors, []);
+  console.log('PASS: real admin/doctor/IT logins, department assignment, draft protection, notes, publication, PDF download, print request, navigation, mobile layout and account disablement.');
+} catch (error) {
+  await adminPage.screenshot({ path: fileURLToPath(new URL('../test-results/doctor-admin-failure.png', import.meta.url)), fullPage: true });
+  await doctorPage.screenshot({ path: fileURLToPath(new URL('../test-results/doctor-flow-failure.png', import.meta.url)), fullPage: true });
+  console.error('Browser diagnostics:', JSON.stringify({ adminUrl: adminPage.url(), doctorUrl: doctorPage.url(), errors }));
+  throw error;
+} finally {
+  await browser.close(); server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await pool.end();
+}

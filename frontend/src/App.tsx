@@ -8,6 +8,7 @@ import { Report } from './components/Report';
 import { ResultEntry } from './components/ResultEntry';
 import { UserAdmin } from './components/UserAdmin';
 import { Worklist } from './components/Worklist';
+import { DoctorWorkspace } from './components/DoctorWorkspace';
 import { useNavigation, type Page } from './hooks/useNavigation';
 import { roleLabel } from './lib';
 import type { Hospital, Order, Profile, User } from './types';
@@ -16,6 +17,7 @@ const defaultHospital = { name: 'Akash Diagnostic Center', address: '', phone: '
 
 function NavIcon({ page }: { page: Page }) {
   const icon = {
+    patients: <><circle cx="12" cy="8" r="3" /><path d="M5 21v-3a7 7 0 0 1 14 0v3M4 4h3M5.5 2.5v3" /></>,
     register: <><circle cx="12" cy="8" r="3" /><path d="M5.5 20c.5-3.2 2.7-5 6.5-5s6 1.8 6.5 5M19 8v5M16.5 10.5h5" /></>,
     worklist: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4.5h6M8.5 10h7M8.5 14h7M8.5 18h4" /></>,
     entry: <><path d="M9 3h6M10 3v5l-5.2 8.3A3.2 3.2 0 0 0 7.5 21h9a3.2 3.2 0 0 0 2.7-4.7L14 8V3" /><path d="M8.5 16h7" /></>,
@@ -40,6 +42,12 @@ export default function App() {
   const [appError, setAppError] = useState('');
 
   useEffect(() => {
+    const expired = () => { setUser(null); setSelectedOrder(null); setAppError(''); };
+    window.addEventListener('lis-session-expired', expired);
+    return () => window.removeEventListener('lis-session-expired', expired);
+  }, []);
+
+  useEffect(() => {
     void api<{ hospital: Hospital }>('/config').then((data) => setHospital(data.hospital)).catch(() => undefined);
     void api<{ initialized: boolean }>('/setup/status').then((data) => setInitialized(data.initialized)).catch((error: Error) => { setAppError(error.message); setInitialized(true); });
     if (getToken()) void api<{ user: User }>('/auth/me').then((data) => setUser(data.user)).catch(() => clearToken());
@@ -47,23 +55,40 @@ export default function App() {
   }, []);
 
   const loadProfiles = useCallback(() => {
-    if (!user) return Promise.resolve();
+    if (!user || ['DOCTOR', 'IT'].includes(user.role)) return Promise.resolve();
     return api<Profile[]>('/profiles').then(setProfiles).catch((error: Error) => setAppError(error.message));
   }, [user]);
 
   useEffect(() => { void loadProfiles(); }, [loadProfiles]);
 
-  const onSession = useCallback((nextUser: User) => { setUser(nextUser); setInitialized(true); }, []);
+  const onSession = useCallback((nextUser: User) => { setUser(nextUser); setInitialized(true); setSelectedOrder(null); navigate(nextUser.role === 'DOCTOR' ? 'patients' : nextUser.role === 'IT' ? 'users' : 'register', undefined, true); }, [navigate]);
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === 'IT' && page !== 'users') navigate('users', undefined, true);
+    if (user.role === 'DOCTOR' && !['patients', 'report'].includes(page)) navigate('patients', undefined, true);
+  }, [user?.role, page, navigate]);
+  useEffect(() => {
+    if (!user) return;
+    const refreshSession = () => {
+      void api<{ user: User }>('/auth/me').then((data) => setUser(data.user)).catch((error: { status?: number }) => {
+        if (error.status === 401) { clearToken(); setUser(null); setSelectedOrder(null); }
+      });
+    };
+    const timer = window.setInterval(refreshSession, 60000);
+    window.addEventListener('focus', refreshSession);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refreshSession); };
+  }, [user?.id]);
   const openOrder = useCallback((id: string, destination: Page = 'entry') => navigate(destination, id), [navigate]);
   useEffect(() => {
     if (!user || !orderId || !['entry', 'report'].includes(page)) return;
+    if (user.role === 'IT' || (user.role === 'DOCTOR' && page !== 'report')) return;
     let active = true;
     setOrderLoading(true); setAppError('');
-    void api<Order>(`/orders/${orderId}`).then((order) => { if (active) setSelectedOrder(order); }).catch((error: Error) => {
+    void api<Order>(user.role === 'DOCTOR' ? `/clinical/orders/${orderId}/results` : `/orders/${orderId}`).then((order) => { if (active) setSelectedOrder(order); }).catch((error: Error) => {
       if (active) { setSelectedOrder(null); setAppError(error.message); }
     }).finally(() => { if (active) setOrderLoading(false); });
     return () => { active = false; };
-  }, [orderId, page, user?.id]);
+  }, [orderId, page, user?.id, user?.role]);
   const updateOrder = useCallback((order: Order) => { setSelectedOrder(order); setWorklistVersion((version) => version + 1); }, []);
 
   function created(order: Order, enterValues = false) { updateOrder(order); navigate(enterValues ? 'entry' : 'worklist', enterValues ? order.id : undefined); }
@@ -74,13 +99,14 @@ export default function App() {
   if (!user) return <LoginScreen onSuccess={onSession} />;
 
   const nav: { id: Page; label: string; shortLabel: string; hidden?: boolean }[] = [
-    { id: 'register', label: 'Patient and order registration', shortLabel: 'New order' },
-    { id: 'worklist', label: 'Sample reception', shortLabel: 'Samples' },
-    { id: 'entry', label: 'Result entry', shortLabel: 'Results' },
-    { id: 'report', label: 'Laboratory reports', shortLabel: 'Reports' },
+    { id: 'patients', label: 'Patients and report status', shortLabel: 'Patients', hidden: user.role === 'IT' },
+    { id: 'register', label: 'Patient and order registration', shortLabel: 'New order', hidden: !['ADMIN', 'TECHNICIAN'].includes(user.role) },
+    { id: 'worklist', label: 'Sample reception', shortLabel: 'Samples', hidden: ['DOCTOR', 'IT'].includes(user.role) },
+    { id: 'entry', label: 'Result entry', shortLabel: 'Results', hidden: ['DOCTOR', 'IT'].includes(user.role) },
+    { id: 'report', label: 'Laboratory reports', shortLabel: 'Reports', hidden: user.role === 'IT' },
     { id: 'exports', label: 'Records export', shortLabel: 'Records', hidden: user.role !== 'ADMIN' },
     { id: 'catalogue', label: 'Investigation catalogue', shortLabel: 'Tests', hidden: user.role !== 'ADMIN' },
-    { id: 'users', label: 'Laboratory users', shortLabel: 'Team', hidden: user.role !== 'ADMIN' }
+    { id: 'users', label: 'Staff and departments', shortLabel: 'Team', hidden: !['ADMIN', 'IT'].includes(user.role) }
   ];
 
   return <div className="app-shell">
@@ -91,15 +117,16 @@ export default function App() {
     </header>
     {appError && <div className="app-error">{appError}<button onClick={() => setAppError('')}>×</button></div>}
     <main>
-      {['exports', 'catalogue', 'users'].includes(page) && user.role !== 'ADMIN' && <section className="page empty-state"><h1>Administrator access required</h1><button onClick={() => setPage('worklist')}>Go to samples</button></section>}
+      {(['exports', 'catalogue'].includes(page) && user.role !== 'ADMIN' || page === 'users' && !['ADMIN', 'IT'].includes(user.role)) && <section className="page empty-state"><h1>Administrator access required</h1><button onClick={() => setPage('patients')}>Go to patients</button></section>}
       {orderLoading && <p className="page loading">Loading selected order…</p>}
-      {page === 'worklist' && <Worklist onOpen={openOrder} reloadKey={worklistVersion} user={user} />}
-      {page === 'register' && <RegisterOrder profiles={profiles} onCreated={created} />}
-      {page === 'entry' && !orderLoading && <ResultEntry key={orderId || 'no-order'} onDeleted={() => { setSelectedOrder(null); setWorklistVersion((v) => v + 1); setPage('worklist'); }} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} user={user} onUpdated={updateOrder} onReport={() => setPage('report')} />}
-      {page === 'report' && !orderLoading && <Report key={orderId || 'no-order'} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} hospital={hospital} user={user} onUpdated={updateOrder} onBack={() => setPage('entry')} />}
+      {page === 'patients' && user.role !== 'IT' && <DoctorWorkspace key={orderId || 'patients'} user={user} orderId={orderId} onSelect={(id) => navigate('patients', id)} onReport={(id) => navigate('report', id)} />}
+      {page === 'worklist' && !['DOCTOR', 'IT'].includes(user.role) && <Worklist onOpen={openOrder} reloadKey={worklistVersion} user={user} />}
+      {page === 'register' && ['ADMIN', 'TECHNICIAN'].includes(user.role) && <RegisterOrder profiles={profiles} onCreated={created} />}
+      {page === 'entry' && !['DOCTOR', 'IT'].includes(user.role) && !orderLoading && <ResultEntry key={orderId || 'no-order'} onDeleted={() => { setSelectedOrder(null); setWorklistVersion((v) => v + 1); setPage('worklist'); }} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} user={user} onUpdated={updateOrder} onReport={() => setPage('report')} />}
+      {page === 'report' && user.role !== 'IT' && !orderLoading && <Report key={orderId || 'no-order'} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} hospital={hospital} user={user} onUpdated={updateOrder} onBack={() => user.role === 'DOCTOR' ? navigate('patients', orderId) : setPage('entry')} />}
       {page === 'exports' && user.role === 'ADMIN' && <RecordsExport />}
       {page === 'catalogue' && user.role === 'ADMIN' && <InvestigationCatalogue onChanged={() => void loadProfiles()} />}
-      {page === 'users' && user.role === 'ADMIN' && <UserAdmin />}
+      {page === 'users' && ['ADMIN', 'IT'].includes(user.role) && <UserAdmin currentUser={user} />}
     </main>
   </div>;
 }

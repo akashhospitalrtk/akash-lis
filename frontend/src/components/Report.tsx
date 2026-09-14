@@ -1,6 +1,8 @@
 import { Fragment } from 'react';
 import { useState } from 'react';
-import { api } from '../api';
+import { api, download } from '../api';
+import { flushSync } from 'react-dom';
+import { DoctorNotes } from './DoctorNotes';
 import { formatAge, formatDate, isDetailOrder, referenceText } from '../lib';
 import type { Hospital, Order, User } from '../types';
 
@@ -24,8 +26,8 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
   const detailed = isDetailOrder(order) ? order : null;
   if (!detailed) return <section className="page empty-state"><h1>No report selected</h1><p>Open an order from the worklist first.</p></section>;
 
-  const canPrint = (user.role === 'ADMIN' || user.role === 'AUTHORIZER') && detailed.status === 'AUTHORIZED';
-  const canDeliver = canPrint && detailed.sample_status !== 'DELIVERED';
+  const canPrint = ['ADMIN', 'AUTHORIZER', 'DOCTOR'].includes(user.role) && detailed.status === 'AUTHORIZED';
+  const canDeliver = ['ADMIN', 'AUTHORIZER'].includes(user.role) && canPrint && detailed.sample_status !== 'DELIVERED';
   const amendmentNo = Number(detailed.amendment_count || 0);
 
   async function amendAndEdit() {
@@ -41,17 +43,23 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
   async function print() {
     if (!canPrint || !detailed) return;
     setBusy(true); setError('');
-    // Keep this synchronous with the button click. Browsers can reject a print dialog
-    // if it is opened only after an awaited network request.
-    window.print();
     try {
-      const updated = await api<Order>(`/orders/${detailed.id}/printed`, { method: 'POST' });
-      onUpdated(updated);
+      const updated = await api<Order>(`/clinical/orders/${detailed.id}/print`, { method: 'POST' });
+      flushSync(() => onUpdated(updated));
+      window.print();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not record printing.');
     } finally {
       setBusy(false);
     }
+  }
+
+  async function downloadPdf() {
+    if (!canPrint || !detailed) return;
+    setBusy(true); setError('');
+    try { await download(`/clinical/orders/${detailed.id}/report.pdf`, `${detailed.accession_no}.pdf`); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not download report.'); }
+    finally { setBusy(false); }
   }
 
   async function deliver() {
@@ -69,11 +77,11 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
 
   return <section className="page report-page">
     <div className="report-actions">
-      <button className="secondary" onClick={onBack}>{detailed.status !== 'AUTHORIZED' && ['ADMIN', 'TECHNICIAN'].includes(user.role) ? 'Edit values' : 'Back to entry'}</button>
+      <button className="secondary" onClick={onBack}>{user.role === 'DOCTOR' ? 'Back to patient' : detailed.status !== 'AUTHORIZED' && ['ADMIN', 'TECHNICIAN'].includes(user.role) ? 'Edit values' : 'Back to entry'}</button>
       {detailed.status === 'AUTHORIZED' && ['ADMIN', 'AUTHORIZER'].includes(user.role) && <button className="secondary" disabled={busy} onClick={() => setShowAmendment(true)}>Amend &amp; edit values</button>}
       <span>{detailed.status === 'AUTHORIZED' ? amendmentNo ? `Authorized amended report - Revision ${amendmentNo}` : 'Authorized report' : amendmentNo ? `Amendment ${amendmentNo} is awaiting authorization.` : 'Preview only - authorization is required before printing.'}</span>
       {canDeliver && <button className="secondary" onClick={() => void deliver()} disabled={busy}>Mark delivered</button>}
-      {canPrint && <button onClick={() => void print()} disabled={busy}>{busy ? 'Recording...' : 'Print / Save PDF'}</button>}
+      {canPrint && <><button className="secondary" onClick={() => void downloadPdf()} disabled={busy}>Download PDF</button><button onClick={() => void print()} disabled={busy}>Print report</button></>}
     </div>
     {error && <p className="form-error">{error}</p>}
 
@@ -139,6 +147,7 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
         <div className="report-support"><p>Report support</p><strong>{hospital.phone || 'Contact the laboratory'}</strong><span>For report queries, please quote the accession number.</span></div>
         <div className="signature"><div className="signature-space">{detailed.authorized_signature_label || (detailed.status === 'AUTHORIZED' ? 'Digitally authorised' : '')}</div><div className="stamp-space" aria-label="Laboratory stamp area">LAB<br />STAMP</div><strong>{detailed.authorized_by_name || 'Authorised Signatory'}</strong>{detailed.authorized_by_designation && <span>{detailed.authorized_by_designation}</span>}</div>
       </footer>
+      {Boolean(detailed.clinical_notes?.length) && <section className="report-doctor-notes"><h3>Doctor clinical notes</h3><p className="muted">Independently authored clinical notes. Laboratory authorization applies to laboratory results; notes may be added later.</p><DoctorNotes notes={detailed.clinical_notes || []} /></section>}
       <div className="report-footer-bar"><span>Computer-generated laboratory report</span><span>Accession: {detailed.accession_no}</span></div>
       <p className="report-note"><strong>Disclaimer:</strong> This laboratory report supports professional clinical opinion and is not, by itself, a diagnosis. Results and reference intervals are method- and laboratory-specific and must be interpreted by a qualified clinician with the patient's history, examination and other findings.</p>
     </article>

@@ -1,5 +1,6 @@
 import type { OrderRow, OrderTestRow, ResultRow } from '../types/database.js';
 import { pool, type DbClient } from '../database/pool.js';
+import { listClinicalNotes } from './clinicalNoteService.js';
 
 export async function getOrderDetails(orderId: string, client: DbClient = pool) {
   const orderResult = await client.query<OrderRow>(
@@ -38,7 +39,8 @@ export async function getOrderDetails(orderId: string, client: DbClient = pool) 
     ...order,
     tests: tests.map((test) => ({ ...test, results: results.filter((result) => result.order_test_id === test.id) })),
     audit,
-    amendments
+    amendments,
+    clinical_notes: await listClinicalNotes(orderId, client)
   };
 }
 

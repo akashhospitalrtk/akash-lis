@@ -15,5 +15,6 @@ COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY database ./database
+COPY backend/assets ./assets
 EXPOSE 4044
 CMD ["sh", "-c", "node dist/src/scripts/migrate.js && node dist/src/scripts/seed.js && node dist/src/server.js"]
