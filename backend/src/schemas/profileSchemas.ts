@@ -108,6 +108,12 @@ export const profileSchema = profileInputSchema.superRefine((profile, context) =
   if ([...dependencies.keys()].some(hasCycle)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['parameters'], message: 'Calculation formulas cannot form a cycle.' });
 });
 
+export const permanentDeleteProfileSchema = z.object({
+  confirmationCode: codeSchema,
+  reason: z.string().trim().min(5, 'Explain why this investigation should be deleted (at least 5 characters).').max(500)
+});
+
 export type ProfileInput = z.infer<typeof profileInputSchema>;
+export type PermanentDeleteProfileInput = z.infer<typeof permanentDeleteProfileSchema>;
 export type ParameterInput = z.infer<typeof parameterSchema>;
 export type ReferenceRange = z.infer<typeof rangeSchema>;

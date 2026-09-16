@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { formatAge, formatDate } from '../lib';
+import { formatAge, formatDate, hasRole } from '../lib';
 import type { Order, ClinicalNote, User } from '../types';
 import { DoctorNotes } from './DoctorNotes';
 
@@ -51,7 +51,7 @@ export function DoctorWorkspace({ user, orderId, onSelect, onReport }: { user: U
     {orderId && loading && !order && <p role="status">Loading patient…</p>}
     {orderId && order && <><div className="card doctor-patient"><div><h2>{order.patient_name}</h2><p>{order.uhid || 'No UHID'} · {formatAge(order)} · {order.gender || 'Sex not recorded'}</p><small>{order.accession_no} · {formatDate(order.sample_date, true)}</small><p>{typeof order.tests === 'string' ? order.tests : ''}</p></div><div><strong>{statusLabel(order)}</strong><p className="muted">{order.status === 'AUTHORIZED' ? `Published ${formatDate(order.authorized_at, true)}` : 'Results will be available after laboratory authorization.'}</p><button disabled={order.status !== 'AUTHORIZED' || loading || busy} onClick={() => onReport(order.id)}>View results & report</button></div></div>
       <section className="card doctor-notes-panel"><h2>Doctor clinical notes</h2><p className="muted">Notes appear on the report with their author and time. Add a new entry to correct an earlier note.</p><DoctorNotes notes={order.clinical_notes || []} />
-        {['DOCTOR', 'ADMIN'].includes(user.role) && <form className="stack" onSubmit={(e) => { e.preventDefault(); void saveNote(); }}><label className="field"><span>Add clinical note</span><textarea required maxLength={5000} disabled={busy} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Record your clinical assessment or follow-up note" /></label><small>{note.length}/5000 characters · Saved as {user.fullName}</small><button disabled={busy || !note.trim()}>{busy ? 'Saving…' : 'Add note to report'}</button></form>}
+        {hasRole(user, 'DOCTOR', 'ADMIN') && <form className="stack" onSubmit={(e) => { e.preventDefault(); void saveNote(); }}><label className="field"><span>Add clinical note</span><textarea required maxLength={5000} disabled={busy} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Record your clinical assessment or follow-up note" /></label><small>{note.length}/5000 characters · Saved as {user.fullName}</small><button disabled={busy || !note.trim()}>{busy ? 'Saving…' : 'Add note to report'}</button></form>}
       </section></>}
   </section>;
 }

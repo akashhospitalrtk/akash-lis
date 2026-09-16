@@ -1,7 +1,7 @@
 import { OrderActions } from './OrderActions';
 import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { formatAge, formatDate, isDetailOrder, referenceText, resultFlag, roleLabel, type ResultTest } from '../lib';
+import { formatAge, formatDate, isDetailOrder, referenceText, resultFlag, userRoleLabel, type ResultTest, hasRole } from '../lib';
 import type { Order, Result, User } from '../types';
 import { Status } from './Worklist';
 
@@ -196,8 +196,8 @@ export function ResultEntry({ order, user, onUpdated, onReport, onDeleted }: { o
   });
 
   if (!detailed) return <section className="page empty-state"><h1>Select an order</h1><p>Choose a report from the worklist, or create a new laboratory order.</p></section>;
-  const canAuthorize = user.role === 'ADMIN' || user.role === 'AUTHORIZER';
-  const canEdit = user.role === 'ADMIN' || user.role === 'TECHNICIAN';
+  const canAuthorize = hasRole(user, 'ADMIN', 'AUTHORIZER');
+  const canEdit = hasRole(user, 'ADMIN', 'TECHNICIAN');
   const locked = detailed.status === 'AUTHORIZED';
   const sampleNotAccepted = detailed.sample_status === 'REGISTERED';
   const sampleNeedsProcessing = detailed.sample_status === 'COLLECTED';
@@ -216,7 +216,7 @@ export function ResultEntry({ order, user, onUpdated, onReport, onDeleted }: { o
     {showAmendment && <section className="amendment-panel"><h2>Start controlled amendment</h2><p>The current authorized report will be preserved as a prior version. Enter why the correction is needed; after correction, the report must be authorized and printed again.</p><label className="field"><span>Amendment reason *</span><textarea autoFocus maxLength={500} value={amendmentReason} onChange={(event) => setAmendmentReason(event.target.value)} placeholder="e.g. Corrected Hb result after analyzer repeat" /></label><div><button type="button" className="secondary" onClick={() => { setShowAmendment(false); setAmendmentReason(''); }}>Cancel</button><button type="button" className="amend-button" onClick={() => void amend()} disabled={busy}>Begin amendment</button></div></section>}
     <div className="test-entry-stack">{detailed.tests.map((test) => <TestEntry key={test.id} test={test} order={detailed} values={values} comments={comments} valueErrors={valueErrors} locked={editingLocked} onChange={changeResult} onCommentChange={(id, value) => setComments((current) => ({ ...current, [id]: value }))} onEnter={moveBetweenResults} />)}</div>
     {detailed.amendments?.length ? <section className="amendment-history card"><h2>Amendment history</h2>{detailed.amendments.map((amendment) => <p key={amendment.id}><strong>Amendment #{amendment.amendment_no}</strong><span>{amendment.reason}</span><small>Started by {amendment.started_by_name || 'Unknown'} · {formatDate(amendment.created_at, true)}{amendment.reauthorized_at ? ` · Re-authorized ${formatDate(amendment.reauthorized_at, true)}` : ' · Correction in progress'}</small></p>)}</section> : null}
-    <section className="audit card"><h2>Audit history</h2><div>{detailed.audit?.length ? detailed.audit.map((event) => <p key={event.id}><strong>{event.event_type.replaceAll('_', ' ')}</strong><span>{event.user_name || 'System'} · {formatDate(event.created_at, true)}</span></p>) : <p className="muted">No audit activity yet.</p>}</div><p className="muted">Current user: {user.fullName} ({roleLabel(user.role)})</p></section>
+    <section className="audit card"><h2>Audit history</h2><div>{detailed.audit?.length ? detailed.audit.map((event) => <p key={event.id}><strong>{event.event_type.replaceAll('_', ' ')}</strong><span>{event.user_name || 'System'} · {formatDate(event.created_at, true)}</span></p>) : <p className="muted">No audit activity yet.</p>}</div><p className="muted">Current user: {user.fullName} ({userRoleLabel(user)})</p></section>
   </section>;
 }
 

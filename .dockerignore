@@ -7,3 +7,10 @@
 **/*.tsbuildinfo
 **/*.log
 lis-backup.sql
+**/.env
+**/.env.*
+**/*.dump
+**/*.dump.sha256
+backups
+lis-release
+**/*.tar

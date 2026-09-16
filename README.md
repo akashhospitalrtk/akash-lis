@@ -10,7 +10,7 @@ Doctors can use **Patients** to search hospital-wide, check order status, view p
 
 `Registration → order tests → enter/review results → authorize → print`
 
-Each laboratory order stores the patient details needed to make the report a permanent clinical record. If the hospital has a master patient system, the order instead keeps only the external source and patient identifier as its link; a read-only adapter retrieves details from that system during registration. This avoids creating a competing master-patient database.
+Each laboratory order stores a patient snapshot needed to make the report a permanent clinical record. HMS lookup retrieves patient details during registration; submitting the order stores those details in LIS PostgreSQL together with the external source and patient identifier. Searching alone does not save a record or write back to HMS.
 
 The core tables are:
 
@@ -46,7 +46,7 @@ The catalogue is intentionally administrator-only. Test and parameter codes are 
    docker compose up --build
    ```
 
-3. Open [http://localhost:8080](http://localhost:8080). The first screen lets you create the first administrator account.
+3. Open the port configured by root `.env`, for example [http://localhost:8081](http://localhost:8081) with the example settings. The first screen lets you create the first administrator account.
 
 4. Stop it when finished:
 
@@ -110,7 +110,7 @@ PostgreSQL can be managed with pgAdmin, the `psql` command-line tool, or a Postg
 
 5. Open the Vite URL, usually `http://localhost:5173`, and create the first administrator from the setup screen.
 
-To verify the backend before opening the frontend, visit `http://localhost:4000/api/health` (standalone development) or `http://localhost:4044/api/health` (Docker). A working setup returns `{"success":true,"message":"Success","data":{"status":"ok","database":"connected"}}`.
+To verify the backend before opening the frontend, visit `http://localhost:4000/api/health` for standalone development or the frontend-proxied `/api/health` endpoint in Docker (for example `http://localhost:8081/api/health`). The production Compose setup does not publish the backend port directly. A working setup returns `{"success":true,"message":"Success","data":{"status":"ok","database":"connected"}}`.
 
 ### Using pgAdmin
 
@@ -131,14 +131,13 @@ You do not need to create LIS tables manually. `npm run migrate` creates the tab
 ## Operations
 
 - Logs: `docker compose logs -f backend` or `docker compose logs -f frontend`
-- Backup: `docker compose exec -T db pg_dump -U lis lis > lis-backup.sql`
-- Restore: `Get-Content lis-backup.sql | docker compose exec -T db psql -U lis lis`
-- Environment values: edit `backend/.env` for database/JWT/hospital details and optional external patient lookup. Rebuild after changing frontend build-time variables.
-- Docker health checks: backend `http://localhost:4044/api/health`; frontend `http://localhost:8080/health` (use the root `.env` `FRONTEND_PORT` override if set, currently 8081 locally).
+- Daily backups, HDD selection, restore checks, root environment settings and Nginx routing: [server operations guide](docs/server-operations.md). Backups start when the new Compose `backup` service is started; choose a protected destination on the server.
+- Environment values: edit root `.env` for Docker; `backend/.env` and `frontend/.env` apply to standalone development. Recreate affected containers after runtime settings change; rebuild after frontend build-time settings change.
+- Docker health checks: frontend `http://localhost:8080/health` and proxied backend `http://localhost:8080/api/health` (use the root `.env` `FRONTEND_PORT` override if set, currently 8081 locally). Backend `4044` and PostgreSQL `5432` remain private inside the Compose network.
 
 ## External patient lookup
 
-Set `HOSPITAL_PATIENT_API_URL` to a hospital read-only endpoint that accepts `?query=UHID-or-name` and returns an array of `{ id, uhid, name, age, gender, mobile, referringDoctor, patientType }`. Set `HOSPITAL_PATIENT_API_TOKEN` if required. The API is only queried during lookup; no external patient row is created locally.
+For an HTTP integration, set `HOSPITAL_PATIENT_API_URL` to a hospital read-only endpoint accepting `?query=UHID-or-name` and returning `{ id, uhid, name, age, gender, mobile, referringDoctor, patientType }` objects. Set `HOSPITAL_PATIENT_API_TOKEN` if needed. If HMS has no API, the optional `HOSPITAL_PATIENT_PROVIDER=mssql` connector reads a restricted SQL Server patient view. See [the mapping and configuration steps](docs/server-operations.md#hms-lookup-api-or-sql-server). Lookup is read-only; order submission stores the patient snapshot locally.
 
 ## Project layout
 

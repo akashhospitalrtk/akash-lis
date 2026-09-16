@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, allowRoles } from '../middleware/auth.js';
 import { validate, validateParams } from '../middleware/validate.js';
 import { idParamsSchema, searchSchema } from '../schemas/commonSchemas.js';
-import { recordsExportSchema, worklistSchema, orderIdsSchema, createOrderSchema, saveResultsSchema, csvImportSchema, amendmentSchema, changeTestsSchema } from '../schemas/orderSchemas.js';
+import { recordsExportSchema, worklistSchema, orderIdsSchema, createOrderSchema, saveResultsSchema, csvImportSchema, amendmentSchema, changeTestsSchema, deleteReportSchema } from '../schemas/orderSchemas.js';
 import * as controller from '../controllers/orderController.js';
 
 export const orderRoutes = Router();
@@ -21,5 +21,5 @@ orderRoutes.post('/orders/:id/deliver', authenticate, allowRoles('ADMIN', 'AUTHO
 orderRoutes.post('/orders/:id/printed', authenticate, allowRoles('ADMIN', 'AUTHORIZER'), validateParams(idParamsSchema), controller.markPrinted);
 orderRoutes.put('/orders/:id/tests', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), validate(changeTestsSchema), controller.changeTests);
 orderRoutes.post('/orders/:id/refresh-references', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), validate(amendmentSchema), controller.refreshOrderReferences);
-orderRoutes.delete('/orders/:id', authenticate, allowRoles('ADMIN'), validateParams(idParamsSchema), validate(amendmentSchema), controller.removeReport);
+orderRoutes.delete('/orders/:id', authenticate, allowRoles('ADMIN'), validateParams(idParamsSchema), validate(deleteReportSchema), controller.removeReport);
 orderRoutes.post('/orders/:id/prepare-entry', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validateParams(idParamsSchema), controller.prepareEntry);

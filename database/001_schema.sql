@@ -5,6 +5,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'DOCTOR';
 ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'IT';
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'CATALOGUE_MANAGER';
 DO $$ BEGIN
   CREATE TYPE result_kind AS ENUM ('NUMERIC', 'TEXT', 'POS_NEG', 'SELECT');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -23,6 +24,19 @@ CREATE TABLE IF NOT EXISTS users (
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- NULL roles preserves old single-role accounts and inserts; new assignments
+-- store a validated nonempty array with role as a compatibility projection.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS roles TEXT[];
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_roles_valid;
+ALTER TABLE users ADD CONSTRAINT users_roles_valid CHECK (roles IS NULL OR (
+  cardinality(roles) BETWEEN 1 AND 6 AND array_ndims(roles) = 1
+  AND array_position(roles, NULL) IS NULL
+  AND roles <@ ARRAY['ADMIN','IT','DOCTOR','TECHNICIAN','AUTHORIZER','CATALOGUE_MANAGER']::text[]
+  AND role::text = roles[1]
+));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sensitive_failed_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sensitive_attempt_window TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS test_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

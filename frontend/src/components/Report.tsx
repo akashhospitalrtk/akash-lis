@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { api, download } from '../api';
 import { flushSync } from 'react-dom';
 import { DoctorNotes } from './DoctorNotes';
-import { formatAge, formatDate, isDetailOrder, referenceText } from '../lib';
+import { formatAge, formatDate, isDetailOrder, referenceText, hasRole } from '../lib';
 import type { Hospital, Order, User } from '../types';
 
 function BrandMark() {
@@ -26,8 +26,8 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
   const detailed = isDetailOrder(order) ? order : null;
   if (!detailed) return <section className="page empty-state"><h1>No report selected</h1><p>Open an order from the worklist first.</p></section>;
 
-  const canPrint = ['ADMIN', 'AUTHORIZER', 'DOCTOR'].includes(user.role) && detailed.status === 'AUTHORIZED';
-  const canDeliver = ['ADMIN', 'AUTHORIZER'].includes(user.role) && canPrint && detailed.sample_status !== 'DELIVERED';
+  const canPrint = hasRole(user, 'ADMIN', 'AUTHORIZER', 'DOCTOR') && detailed.status === 'AUTHORIZED';
+  const canDeliver = hasRole(user, 'ADMIN', 'AUTHORIZER') && canPrint && detailed.sample_status !== 'DELIVERED';
   const amendmentNo = Number(detailed.amendment_count || 0);
 
   async function amendAndEdit() {
@@ -77,8 +77,8 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
 
   return <section className="page report-page">
     <div className="report-actions">
-      <button className="secondary" onClick={onBack}>{user.role === 'DOCTOR' ? 'Back to patient' : detailed.status !== 'AUTHORIZED' && ['ADMIN', 'TECHNICIAN'].includes(user.role) ? 'Edit values' : 'Back to entry'}</button>
-      {detailed.status === 'AUTHORIZED' && ['ADMIN', 'AUTHORIZER'].includes(user.role) && <button className="secondary" disabled={busy} onClick={() => setShowAmendment(true)}>Amend &amp; edit values</button>}
+      <button className="secondary" onClick={onBack}>{!hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER') ? 'Back to patient' : detailed.status !== 'AUTHORIZED' && hasRole(user, 'ADMIN', 'TECHNICIAN') ? 'Edit values' : 'Back to entry'}</button>
+      {detailed.status === 'AUTHORIZED' && hasRole(user, 'ADMIN', 'AUTHORIZER') && <button className="secondary" disabled={busy} onClick={() => setShowAmendment(true)}>Amend &amp; edit values</button>}
       <span>{detailed.status === 'AUTHORIZED' ? amendmentNo ? `Authorized amended report - Revision ${amendmentNo}` : 'Authorized report' : amendmentNo ? `Amendment ${amendmentNo} is awaiting authorization.` : 'Preview only - authorization is required before printing.'}</span>
       {canDeliver && <button className="secondary" onClick={() => void deliver()} disabled={busy}>Mark delivered</button>}
       {canPrint && <><button className="secondary" onClick={() => void downloadPdf()} disabled={busy}>Download PDF</button><button onClick={() => void print()} disabled={busy}>Print report</button></>}

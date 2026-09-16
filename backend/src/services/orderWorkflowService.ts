@@ -5,7 +5,10 @@ import { recalculateOrderTest, refreshOrderStatus, resultFlag, validatedResultVa
 import { applyAnalyzerResults } from './analyzerService.js';
 import { getOrderDetails, nextAccession } from './orderService.js';
 import { prepareForEntry } from './sampleService.js';
-import { lockOrder, addOrderTest, changeOrderTests, refreshReferences, deleteReport } from './orderRevisionService.js';
+import { lockOrder, addOrderTest, changeOrderTests, refreshReferences } from './orderRevisionService.js';
+import { hasRole } from './permissionService.js';
+import { removeClinicalRecord } from './recordDeletionService.js';
+import type { DeleteReportInput } from '../schemas/orderSchemas.js';
 import { parseCsv, csvDocument } from '../utils/csv.js';
 import type { SearchInput } from '../schemas/commonSchemas.js';
 import type { SessionUser } from '../schemas/authSchemas.js';
@@ -93,6 +96,7 @@ export async function acceptSamples(input: OrderIdsInput, user: SessionUser) {
 }
 
 export async function createOrder(input: CreateOrderInput, user: SessionUser) {
+  if (!hasRole(user, 'ADMIN', 'TECHNICIAN')) throw AppError.forbidden('Registration and direct value entry require the Technician or Administrator role.');
   const payload = input;
   const ageValue = payload.ageValue ?? payload.ageYears ?? null;
   const ageUnit = payload.ageValue != null ? payload.ageUnit : 'years';
@@ -122,6 +126,7 @@ export async function getOrder(orderId: string) {
 }
 
 export async function saveResults(input: SaveResultsInput, orderId: string, user: SessionUser) {
+  if (!hasRole(user, 'ADMIN', 'TECHNICIAN')) throw AppError.forbidden('Result entry requires the Technician or Administrator role.');
   const payload = input;
   const results = payload.results;
   await withTransaction(async (client) => {
@@ -210,6 +215,7 @@ export async function amendReport(input: AmendmentInput, orderId: string, user: 
 }
 
 export async function authorizeReport(orderId: string, user: SessionUser) {
+  if (!hasRole(user, 'ADMIN', 'AUTHORIZER')) throw AppError.forbidden('Report authorization requires the Authorizer or Administrator role.');
   await withTransaction(async (client) => {
     const order = await lockOrder(client, orderId, false);
     const { rows: missing } = await client.query(
@@ -265,13 +271,12 @@ export async function refreshOrderReferences(input: AmendmentInput, orderId: str
   return await getOrderDetails(orderId);
 }
 
-export async function removeReport(input: AmendmentInput, orderId: string, user: SessionUser) {
-  const { reason } = input;
-  await withTransaction((client) => deleteReport(client, orderId, reason, user.id));
-  return;
+export async function removeReport(input: DeleteReportInput, orderId: string, user: SessionUser) {
+  await removeClinicalRecord(input, orderId, user);
 }
 
 export async function prepareEntry(orderId: string, user: SessionUser) {
+  if (!hasRole(user, 'ADMIN', 'TECHNICIAN')) throw AppError.forbidden('Direct value entry requires the Technician or Administrator role.');
   await withTransaction((client) => prepareForEntry(client, orderId, user.id));
   return getOrderDetails(orderId);
 }

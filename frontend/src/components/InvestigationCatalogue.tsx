@@ -32,6 +32,9 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPermanentDelete, setShowPermanentDelete] = useState(false);
+  const [deleteConfirmationCode, setDeleteConfirmationCode] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
   const [templateKey, setTemplateKey] = useState('h360');
   const [includeSourceRanges, setIncludeSourceRanges] = useState(false);
   const template = catalogueTemplates.find((item) => item.key === templateKey)!;
@@ -51,7 +54,7 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
   function canDiscard() { return !dirty || window.confirm('Discard your unsaved catalogue changes?'); }
   function resetEditor(next: DraftProfile, id: string | null) {
     setDraft(next); setBaseline(JSON.stringify(next)); setExpandedKey(id ? null : next.parameters[0]?.clientKey || null);
-    setParameterQuery(''); setShowInactive(false); setShowReuse(false); profileCodeEdited.current = Boolean(id);
+    setParameterQuery(''); setShowInactive(false); setShowReuse(false); setShowPermanentDelete(false); setDeleteConfirmationCode(''); setDeleteReason(''); profileCodeEdited.current = Boolean(id);
   }
   function discardChanges() {
     if (!canDiscard()) return;
@@ -213,9 +216,22 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not restore the investigation.'); }
     finally { setBusy(false); }
   }
+  async function permanentlyDelete() {
+    if (!selected || busy) return;
+    if (deleteConfirmationCode.trim().toUpperCase() !== selected.code) { setError(`Type ${selected.code} exactly to confirm permanent deletion.`); return; }
+    if (deleteReason.trim().length < 5) { setError('Enter a deletion reason of at least 5 characters.'); return; }
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const deletedName = selected.name;
+      await api(`/catalogue/profiles/${selected.id}/permanent`, { method: 'DELETE', body: JSON.stringify({ confirmationCode: deleteConfirmationCode.trim().toUpperCase(), reason: deleteReason }) });
+      await loadProfiles(); resetEditor(blankProfile(), null); setSelectedId(null); setAudit([]);
+      setMessage(`${deletedName} was permanently deleted because it had no patient-order history.`); onChanged();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not permanently delete the investigation.'); }
+    finally { setBusy(false); }
+  }
 
   return <section className="page catalogue-page" onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); formRef.current?.requestSubmit(); } }}>
-    <div className="page-heading"><div><p className="eyebrow">Administrator only</p><h1>Investigation catalogue</h1><p className="muted">Configure the tests your laboratory performs. Changes affect only new orders; reported orders remain clinically traceable.</p></div><button type="button" onClick={createNew}>Add investigation</button></div>
+    <div className="page-heading"><div><p className="eyebrow">Authorized catalogue access</p><h1>Investigation catalogue</h1><p className="muted">Configure the tests your laboratory performs. Changes affect only new orders; reported orders remain clinically traceable.</p></div><button type="button" onClick={createNew}>Add investigation</button></div>
     <details className="card catalogue-help"><summary>Analyzer / report templates and setup guide</summary>
       <p>H360 uses a 3-part differential. Chem 7 is a photometer; chemistry methods depend on the reagent kit. Report templates reproduce another lab's method labels for review.</p>
       <div className="catalogue-basic-grid"><label className="field"><span>Setup template</span><select value={templateKey} onChange={(event) => { setTemplateKey(event.target.value); setIncludeSourceRanges(false); }}>{catalogueTemplates.map((item) => <option key={item.key} value={item.key}>{item.name} /  {item.key === 'h360' ? 'your analyzer' : 'sample report'}</option>)}</select></label></div>
@@ -263,7 +279,8 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
           {error && <p role="alert" className="form-error">{error}</p>}{message && <p role="status" className="success-message">{message}</p>}
           <div className="catalogue-save-line"><span className={dirty ? 'unsaved-label' : 'muted'}>{dirty ? 'Unsaved changes' : selectedId ? 'All changes saved' : 'Start with a name; codes are generated for you'}<small>Ctrl+S to save | Changes apply to new orders</small></span><div className="catalogue-button-group">{dirty && <button type="button" className="secondary" disabled={busy} onClick={discardChanges}>Discard changes</button>}<button disabled={busy}>{busy ? 'Saving...' : selectedId ? 'Save investigation' : 'Create investigation'}</button></div></div>
         </div>
-        {selected && <details className="catalogue-optional"><summary>Investigation actions and history</summary><div className="catalogue-button-group"><button type="button" className="secondary" onClick={duplicateInvestigation} disabled={busy}>Duplicate investigation</button>{selected.active === false ? <button type="button" className="secondary" onClick={() => void restore()} disabled={busy}>Restore investigation</button> : <button type="button" className="text-button danger-text" onClick={() => void archive()} disabled={busy}>Archive investigation</button>}</div>
+        {selected && <details className="catalogue-optional"><summary>Investigation actions and history</summary><div className="catalogue-button-group"><button type="button" className="secondary" onClick={duplicateInvestigation} disabled={busy}>Duplicate investigation</button>{selected.active === false ? <button type="button" className="secondary" onClick={() => void restore()} disabled={busy}>Restore investigation</button> : <button type="button" className="text-button danger-text" onClick={() => void archive()} disabled={busy}>Archive investigation</button>}<button type="button" className="text-button danger-text" onClick={() => { if (canDiscard()) { setShowPermanentDelete(true); setDeleteConfirmationCode(''); setDeleteReason(''); setError(''); } }} disabled={busy}>Delete permanently</button></div>
+        {showPermanentDelete && <section className="order-action-panel danger-action"><h3>Delete unused investigation permanently</h3><p>This is only allowed when the investigation has never been used in a patient order. Otherwise, archive it so historical reports remain traceable.</p><label className="field"><span>Type investigation code {selected.code}</span><input aria-label="Confirm investigation code" autoComplete="off" value={deleteConfirmationCode} onChange={(event) => setDeleteConfirmationCode(event.target.value.toUpperCase())} /></label><label className="field"><span>Deletion reason</span><textarea aria-label="Permanent deletion reason" minLength={5} maxLength={500} value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} /></label><div className="catalogue-button-group"><button type="button" className="secondary" disabled={busy} onClick={() => { setShowPermanentDelete(false); setDeleteConfirmationCode(''); setDeleteReason(''); }}>Cancel</button><button type="button" className="danger-action" disabled={busy || deleteConfirmationCode !== selected.code || deleteReason.trim().length < 5} onClick={() => void permanentlyDelete()}>{busy ? 'Deleting...' : 'Confirm permanent deletion'}</button></div></section>}
         {selectedId && <section className="catalogue-audit"><h3>Catalogue history</h3>{audit.length ? audit.map((event) => <p key={event.id}><strong>{event.event_type.replaceAll('_', ' ')}</strong><span>{event.user_name || 'System'} · {formatDate(event.created_at, true)}</span></p>) : <p className="muted">No catalogue events recorded yet.</p>}</section>}
         </details>}
       </form>

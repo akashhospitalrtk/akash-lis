@@ -59,7 +59,7 @@ export async function refreshReferences(client: DbClient, id: string, reason: st
 }
 
 export async function deleteReport(client: DbClient, id: string, reason: string, userId: string) {
-  await lockOrder(client, id, false);
+  const order = await lockOrder(client, id, false);
   await client.query('UPDATE lab_orders SET deleted_at = NOW(), deleted_by = $1, deletion_reason = $2, updated_at = NOW() WHERE id = $3', [userId, reason, id]);
-  await addAudit(client, id, userId, 'REPORT_DELETED', { reason });
+  await addAudit(client, id, userId, 'REPORT_DELETED', { reason, action: order.status === 'AUTHORIZED' ? 'VOID' : 'ARCHIVE', previousStatus: order.status, patientSnapshotRetained: true });
 }

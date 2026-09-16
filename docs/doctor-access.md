@@ -11,9 +11,14 @@ Preview: **Patients & status → Patient/order → Published results → Print /
 - Doctor: `patient.view`, `status.view`, `result.view`, `report.print`, `report.download`, `clinical_notes.write`.
 - Administrator: existing laboratory administration plus staff/department management and clinical access.
 - IT: staff/department management only. IT cannot grant or modify ADMIN/IT accounts, including its own account; an administrator manages those roles.
+- Investigation manager: Tests catalogue management only. This role can create, edit, archive and restore investigations, and permanently delete one only when it has never been used in a patient order. Only an administrator can assign this role.
 - Technician and authorizer: retain existing laboratory workflow access and can read clinical notes. Authorizers can print/download released reports.
 
-Departments describe staff affiliation and do not restrict patient visibility in this hospital-wide configuration. Accounts may have multiple departments. No department or staff accounts are created automatically.
+Accounts may have multiple roles and departments. Select Technician plus Report authorizer to allow the same person to enter values and authorize their report; a single role grants only its own capabilities. Administrator includes both capabilities. IT delegation remains limited to clinical accounts and cannot grant Administrator, IT or Investigation manager; access checks inspect all assigned roles.
+
+Departments describe staff affiliation and do not restrict patient visibility in this hospital-wide configuration. No department or staff accounts are created automatically.
+
+Report removal is administrator-only, with exact accession, a 10-500 character reason and current administrator password. Persistent failed-confirmation throttling applies. Removal retains the patient snapshot, results, notes and audit history; published reports are voided and unreleased records archived. There is no patient-master hard-delete API. See [the access and machine setup guide](another-machine-setup.md) for scope and operational steps.
 
 Roles, department membership and active status are read from the database on every authenticated request, so disabling an account or changing its role affects existing sessions on the next request. Changes to staff access are audited without passwords. Users cannot disable or change the role of their own account.
 
@@ -28,8 +33,8 @@ All clinical and staff controllers use the shared `asyncHandler`, which forwards
 ## How to use
 
 1. Sign in as an administrator and open **Team**.
-2. Add departments, then create individual doctor, technician, authorizer or IT accounts. Assign one or more departments as appropriate.
-3. To update an existing account, choose **Edit access**, change its role/departments/active state, and choose **Save access**. IT can manage clinical staff; administrator/IT accounts require an administrator.
+2. Add departments, then create individual staff accounts. Select one or more Assigned roles checkboxes and departments as appropriate.
+3. To update an existing account, choose **Edit access**, change its roles/departments/active state, and choose **Save access**. IT can manage clinical staff; accounts containing Administrator or IT require an administrator.
 4. Doctors sign in on the same login page and land on **Patients**. Search across all dates by patient name, UHID or accession, or filter report status. Each row represents a laboratory order/patient snapshot.
 5. Open a patient to check progress or add a clinical note. **View results & report** becomes available after lab authorization. **Download PDF** saves a real PDF; **Print report** rechecks release status and opens the browser print dialog.
 6. During a laboratory amendment, new doctor requests for results/print/download are blocked until reauthorization. Previously downloaded copies are not revoked.
@@ -50,7 +55,9 @@ node --test test/doctor-pdf.test.js
 
 Run `test/doctor-browser.mjs` against a separate fresh `_test` database after building the frontend. It uses `PLAYWRIGHT_MODULE_PATH` for an installed Playwright module and writes only synthetic screenshots/PDFs to the ignored `backend/test-results/` folder. The PDF test consumes the PDF created by the integration test.
 
-After updating the running Docker installation, startup runs the idempotent schema migration automatically:
+The repeatable `test/run-access-regression.mjs` runner creates a separate disposable database per suite on an explicitly configured local test server. It covers multi-role access, removal security, architecture, catalogue, doctor access, PDF and browser workflows. Set `PLAYWRIGHT_MODULE_PATH` to a file URL for an installed Playwright module to also enable the catalogue browser subtest. Never point the runner at the hospital database.
+
+Back up first, using the same Compose project name/folder as the existing deployment. After updating the running Docker installation, startup runs the idempotent schema migration automatically:
 
 ```powershell
 docker compose up -d --build backend frontend

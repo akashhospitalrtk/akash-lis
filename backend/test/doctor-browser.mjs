@@ -43,7 +43,8 @@ try {
   await adminPage.getByLabel('Full name', { exact: true }).fill('Dr Browser');
   await adminPage.getByLabel('Username', { exact: true }).fill('browser_doctor');
   await adminPage.getByLabel('Initial password', { exact: true }).fill(password);
-  await adminPage.getByLabel('Role', { exact: true }).selectOption('DOCTOR');
+  await adminPage.getByLabel('Role: Lab technician', { exact: true }).uncheck();
+  await adminPage.getByLabel('Role: Doctor', { exact: true }).check();
   await adminPage.getByLabel('Medicine', { exact: true }).check();
   await adminPage.getByLabel('Designation', { exact: true }).fill('Consultant');
   await adminPage.getByRole('button', { name: 'Create user', exact: true }).click();
@@ -92,7 +93,7 @@ try {
   await doctorPage.goto(`${base}/register`); await doctorPage.getByRole('heading', { name: 'Patients & report status' }).waitFor();
   await login(itPage, 'browser_it'); await itPage.getByRole('heading', { name: 'Staff & departments' }).waitFor();
   assert.equal(await itPage.getByRole('button', { name: 'Patients and report status' }).count(), 0);
-  assert.equal(await itPage.getByLabel('Role', { exact: true }).locator('option[value="ADMIN"]').count(), 0);
+  assert.equal(await itPage.getByLabel('Role: Administrator', { exact: true }).count(), 0);
   await itPage.getByRole('button', { name: 'Edit Dr Browser' }).click();
   await itPage.getByLabel('Account active', { exact: true }).uncheck(); await itPage.getByRole('button', { name: 'Save access', exact: true }).click();
   await itPage.getByRole('status').filter({ hasText: 'Staff access updated' }).waitFor();

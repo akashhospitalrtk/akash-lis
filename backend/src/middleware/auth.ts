@@ -4,7 +4,7 @@ import { config } from '../config/env.js';
 import { AppError } from '../core/AppError.js';
 import { sessionSchema, type SessionUser } from '../schemas/authSchemas.js';
 import { loadSession } from '../services/authService.js';
-import { permissionsFor, type Permission } from '../services/permissionService.js';
+import { hasRole, permissionsFor, type Permission } from '../services/permissionService.js';
 
 export const authenticate: RequestHandler = (req, _res, next) => {
   const token = req.header('Authorization')?.replace(/^Bearer\s+/i, '');
@@ -17,14 +17,14 @@ export const authenticate: RequestHandler = (req, _res, next) => {
 
 export function allowPermission(permission: Permission): RequestHandler {
   return (req, _res, next) => {
-    if (!req.user || !permissionsFor(req.user.role).includes(permission)) { next(AppError.forbidden()); return; }
+    if (!req.user || !permissionsFor(req.user.roles ?? [req.user.role]).includes(permission)) { next(AppError.forbidden()); return; }
     next();
   };
 }
 
 export function allowRoles(...roles: SessionUser['role'][]): RequestHandler {
   return (req, _res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) { next(AppError.forbidden()); return; }
+    if (!req.user || !hasRole(req.user, ...roles)) { next(AppError.forbidden()); return; }
     next();
   };
 }

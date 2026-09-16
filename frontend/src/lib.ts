@@ -1,4 +1,15 @@
-import type { Order, OrderTest, ReferenceRange, Result } from './types';
+import type { Order, OrderTest, ReferenceRange, Result, Role, User } from './types';
+
+export function hasRole(user: Pick<User, 'role' | 'roles'>, ...roles: Role[]) {
+  return (user.roles ?? [user.role]).some((role) => roles.includes(role));
+}
+export function userRoleLabel(user: Pick<User, 'role' | 'roles'>) {
+  return (user.roles ?? [user.role]).map(roleLabel).join(' + ');
+}
+export function hasPermission(user: Pick<User, 'role' | 'roles' | 'permissions'>, permission: string) {
+  if (user.permissions) return user.permissions.includes(permission);
+  return hasRole(user, 'ADMIN') || (permission.startsWith('catalogue.') && hasRole(user, 'CATALOGUE_MANAGER'));
+}
 
 export function formatDate(value?: string | null, withTime = false) {
   if (!value) return '—';
@@ -51,7 +62,7 @@ export function isDetailOrder(order: Order | null): order is Order & { tests: Re
 export type ResultTest = OrderTest;
 
 export function roleLabel(role: string) {
-  return { ADMIN: 'Administrator', IT: 'Hospital IT', DOCTOR: 'Doctor', TECHNICIAN: 'Lab technician', AUTHORIZER: 'Report authorizer' }[role] || role;
+  return { ADMIN: 'Administrator', IT: 'Hospital IT', DOCTOR: 'Doctor', TECHNICIAN: 'Lab technician', AUTHORIZER: 'Report authorizer', CATALOGUE_MANAGER: 'Investigation manager' }[role] || role;
 }
 
 export function formatAge(order: Pick<Order, 'age_value' | 'age_unit' | 'age_years'>) {

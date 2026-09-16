@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-lis}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -8,8 +9,8 @@ services:
     volumes:
       - lis_postgres_data:/var/lib/postgresql/data
       - ./database:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -17,12 +18,11 @@ services:
       retries: 20
 
   backend:
+    image: akash-lis-backend:${LIS_VERSION:-1.1.0}
+    restart: unless-stopped
     build:
-      tags:
-        - akash-lis-backend:1.0.0
       context: .
       dockerfile: backend/Dockerfile
-     
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       PORT: 4044
@@ -32,11 +32,20 @@ services:
       HOSPITAL_PHONE: ${HOSPITAL_PHONE:-7206620626}
       HOSPITAL_PATIENT_API_URL: ${HOSPITAL_PATIENT_API_URL:-}
       HOSPITAL_PATIENT_API_TOKEN: ${HOSPITAL_PATIENT_API_TOKEN:-}
+      HOSPITAL_PATIENT_PROVIDER: ${HOSPITAL_PATIENT_PROVIDER:-api}
+      HMS_SQL_SERVER: ${HMS_SQL_SERVER:-}
+      HMS_SQL_PORT: ${HMS_SQL_PORT:-1433}
+      HMS_SQL_DATABASE: ${HMS_SQL_DATABASE:-}
+      HMS_SQL_USER: ${HMS_SQL_USER:-}
+      HMS_SQL_PASSWORD: ${HMS_SQL_PASSWORD:-}
+      HMS_SQL_PATIENT_VIEW: ${HMS_SQL_PATIENT_VIEW:-dbo.LisPatientLookup}
+      HMS_SQL_ENCRYPT: ${HMS_SQL_ENCRYPT:-true}
+      HMS_SQL_TRUST_SERVER_CERTIFICATE: ${HMS_SQL_TRUST_SERVER_CERTIFICATE:-false}
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "4044:4044"
+    expose:
+      - "4044"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4044/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -44,9 +53,9 @@ services:
       retries: 10
 
   frontend:
+    image: akash-lis-frontend:${LIS_VERSION:-1.1.0}
+    restart: unless-stopped
     build:
-      tags:
-        - akash-lis-frontend:1.0.0
       context: .
       dockerfile: frontend/Dockerfile
       args:
@@ -61,6 +70,42 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+
+  backup:
+    # Reuses the db image; runs pg_dump, not a second PostgreSQL server.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/opt/lis/backup.sh"]
+    command: ["schedule"]
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-lis}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGCONNECT_TIMEOUT: 15
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - type: bind
+        source: ${LIS_BACKUP_DIR:-./backups}
+        target: /backups
+        bind:
+          create_host_path: false
+      - ./docker/backup.sh:/opt/lis/backup.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/opt/lis/backup.sh", "health"]
+      interval: 60s
+      timeout: 5s
+      retries: 1
+      start_period: 5m
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
 
 volumes:
   lis_postgres_data:

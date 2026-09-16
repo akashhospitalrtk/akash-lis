@@ -2,8 +2,8 @@ import { pool, withTransaction, type DbClient } from '../database/pool.js';
 import { AppError } from '../core/AppError.js';
 import { getDescriptionLibrary } from './descriptionService.js';
 import { planParameters, writeParameters } from './catalogueService.js';
-import { catalogueAudit } from './auditService.js';
-import { profileSchema, type ProfileInput } from '../schemas/profileSchemas.js';
+import { addSystemAudit, catalogueAudit } from './auditService.js';
+import { permanentDeleteProfileSchema, profileSchema, type PermanentDeleteProfileInput, type ProfileInput } from '../schemas/profileSchemas.js';
 import type { ProfileRow, ParameterRow } from '../types/database.js';
 function normalizedProfile(row: ProfileRow, parameters: ParameterRow[]) {
   return { ...row, parameters: parameters.filter((parameter) => parameter.profile_id === row.id) };
@@ -80,4 +80,25 @@ export async function restoreProfile(profileId: string, userId: string) {
     return rows[0];
   });
   return (await readProfiles({ includeInactive: true })).find((item) => item.id === profile.id);
+}
+
+export async function permanentlyDeleteProfile(input: PermanentDeleteProfileInput, profileId: string, userId: string) {
+  const payload = permanentDeleteProfileSchema.parse(input);
+  await withTransaction(async (client) => {
+    const profile = (await client.query('SELECT * FROM test_profiles WHERE id = $1 FOR UPDATE', [profileId])).rows[0];
+    if (!profile) throw new AppError('Investigation not found.', 404);
+    if (payload.confirmationCode !== profile.code) throw AppError.conflict('The confirmation code does not match this investigation.');
+    const used = (await client.query(`SELECT EXISTS (
+      SELECT 1 FROM order_tests WHERE profile_id = $1
+      UNION ALL
+      SELECT 1 FROM test_results r JOIN profile_parameters p ON p.id = r.parameter_id WHERE p.profile_id = $1
+    ) AS used`, [profileId])).rows[0].used;
+    if (used) throw AppError.conflict('This investigation has patient-order history and cannot be permanently deleted. Archive it instead.');
+    const parameters = (await client.query('SELECT code, name FROM profile_parameters WHERE profile_id = $1 ORDER BY sort_order, name', [profileId])).rows;
+    await addSystemAudit(client, userId, 'INVESTIGATION_PERMANENTLY_DELETED', {
+      profileId, code: profile.code, name: profile.name, reason: payload.reason, parameters
+    });
+    await client.query('DELETE FROM catalogue_audit_events WHERE profile_id = $1', [profileId]);
+    await client.query('DELETE FROM test_profiles WHERE id = $1', [profileId]);
+  });
 }

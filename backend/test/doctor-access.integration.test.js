@@ -127,7 +127,7 @@ test('doctor publication, clinical notes, downloads and staff access control', a
     assert.ok(events.length >= 3); assert.doesNotMatch(JSON.stringify(events), /password|hash|Synthetic-only/);
   });
   await t.test('deleted orders are excluded from clinical search, notes and downloads', async () => {
-    assert.equal((await request(`/orders/${order.id}`, admin.token, 'DELETE', { reason: 'Remove synthetic order only' })).status, 204);
+    assert.equal((await request(`/orders/${order.id}`, admin.token, 'DELETE', { reason: 'Remove synthetic order only', confirmationAccession: order.accession_no, password })).status, 204);
     assert.equal((await request('/clinical/orders?query=DOCTOR-TEST-001', admin.token)).body.data.items.length, 0);
     for (const [suffix, method, body] of [['', 'GET'], ['/report.pdf', 'GET'], ['/notes', 'POST', { body: 'Not permitted' }]]) assert.equal((await request(`/clinical/orders/${order.id}${suffix}`, admin.token, method, body)).status, 404);
   });

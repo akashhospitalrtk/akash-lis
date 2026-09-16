@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { errorHandler } from '../dist/src/middleware/errorHandler.js';
 import { config } from '../dist/src/config/env.js';
 import { pool } from '../dist/src/database/pool.js';
@@ -25,9 +26,13 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
   await pool.query(schema);
   await pool.query(seed);
   const user = (await pool.query("INSERT INTO users (username, password_hash, full_name, role) VALUES ('catalogue_test_fixture', 'not-a-login-hash', 'Catalogue Test Fixture', 'ADMIN') RETURNING id")).rows[0];
+  const deletionPassword = 'Synthetic-deletion-only-123';
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [await bcrypt.hash(deletionPassword, 10), user.id]);
   const token = jwt.sign({ id: user.id, role: 'ADMIN' }, config.jwtSecret);
   const technician = (await pool.query("INSERT INTO users (username, password_hash, full_name, role) VALUES ('catalogue_technician_fixture', 'not-a-login-hash', 'Catalogue Technician Fixture', 'TECHNICIAN') RETURNING id")).rows[0];
   const technicianToken = jwt.sign({ id: technician.id, role: 'TECHNICIAN' }, config.jwtSecret);
+  const manager = (await pool.query("INSERT INTO users (username, password_hash, full_name, role, roles) VALUES ('catalogue_manager_fixture', 'not-a-login-hash', 'Catalogue Manager Fixture', 'CATALOGUE_MANAGER', ARRAY['CATALOGUE_MANAGER']) RETURNING id")).rows[0];
+  const managerToken = jwt.sign({ id: manager.id, role: 'CATALOGUE_MANAGER', roles: ['CATALOGUE_MANAGER'] }, config.jwtSecret);
   const app = express(); app.use(express.json());
   app.get('/api/config', (_req, res) => res.json({ hospital: { name: 'Test Lab', address: '', phone: '' } }));
   app.get('/api/setup/status', (_req, res) => res.json({ initialized: true }));
@@ -38,7 +43,7 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
   app.use(errorHandler);
   const server = app.listen(0, '127.0.0.1'); await new Promise((resolve) => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  t.after(async () => { await new Promise((resolve) => server.close(resolve)); await pool.end(); });
+  t.after(async () => { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await pool.end(); });
   async function request(path, method = 'GET', body, auth = token) {
     const response = await fetch(`${base}/api${path}`, { method, headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
     const responseBody = await response.json().catch(() => null);
@@ -99,6 +104,20 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
     const saved = await request(`/catalogue/profiles/${lft.id}`, 'PUT', input); assert.equal(saved.status, 200);
     assert.equal(saved.body.parameters.find((p) => p.id === first.id).code, b); lft = saved.body;
   });
+  await t.test('admin-assigned investigation manager can delete only unused catalogue tests', async () => {
+    const input = { code: 'DEMO_DELETE', name: 'Disposable Demo Test', department: 'Laboratory', parameters: [{ code: 'DEMO_VALUE', name: 'Demo value', resultKind: 'TEXT', referenceRanges: [], selectOptions: [], commonValues: [], sortOrder: 1, active: true }] };
+    assert.equal((await request('/catalogue/profiles', 'GET', undefined, technicianToken)).status, 403);
+    const created = await request('/catalogue/profiles', 'POST', input, managerToken);
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal((await request(`/catalogue/profiles/${created.body.id}/permanent`, 'DELETE', { confirmationCode: 'WRONG', reason: 'Remove demo setup' }, managerToken)).status, 409);
+    assert.equal((await request(`/catalogue/profiles/${created.body.id}/permanent`, 'DELETE', { confirmationCode: created.body.code, reason: 'Remove demo setup' }, technicianToken)).status, 403);
+    assert.equal((await request(`/catalogue/profiles/${created.body.id}/permanent`, 'DELETE', { confirmationCode: created.body.code, reason: 'Remove demo setup' }, managerToken)).status, 204);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM test_profiles WHERE id=$1', [created.body.id])).rows[0].n, 0);
+    const deletionAudit = (await pool.query("SELECT details FROM system_audit_events WHERE event_type='INVESTIGATION_PERMANENTLY_DELETED' AND user_id=$1 ORDER BY created_at DESC LIMIT 1", [manager.id])).rows[0];
+    assert.equal(deletionAudit.details.code, 'DEMO_DELETE');
+    assert.equal((await request(`/catalogue/profiles/${lft.id}/permanent`, 'DELETE', { confirmationCode: lft.code, reason: 'Must retain used test' }, managerToken)).status, 409);
+    assert.ok((await request('/catalogue/profiles', 'GET', undefined, managerToken)).body.some((profile) => profile.id === lft.id));
+  });
   await t.test('age units, reference refresh, test replacement and audited deletion', async () => {
     const input = { code: 'AGE_TEST', name: 'Age Test', department: 'Immunoassay', specimenType: 'Serum', parameters: [{ code: 'TSH', name: 'TSH', resultKind: 'NUMERIC', unit: 'mIU/mL', method: 'CLIA', referenceNote: 'Interpretation note', referenceRanges: [{ label: 'Infant', ageMin: 0, ageMax: 12, ageUnit: 'months', low: 1, high: 8 }, { label: 'Adult', ageMin: 18, ageUnit: 'years', low: .5, high: 5 }], selectOptions: [], commonValues: [], sortOrder: 1, active: true }] };
     const created = await request('/catalogue/profiles', 'POST', input); assert.equal(created.status, 201, JSON.stringify(created.body));
@@ -124,7 +143,7 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
     assert.equal((await request(`/orders/${order.id}/refresh-references`, 'POST', { reason: 'Must be blocked after authorization' })).status, 409);
     assert.equal((await request(`/orders/${order.id}/tests`, 'PUT', { profileIds: [kidney.id], reason: 'Must be blocked after authorization' })).status, 409);
     assert.equal((await request(`/orders/${order.id}`, 'DELETE', { reason: 'Duplicate registration removed' }, technicianToken)).status, 403);
-    assert.equal((await request(`/orders/${order.id}`, 'DELETE', { reason: 'Duplicate registration removed' })).status, 204);
+    assert.equal((await request(`/orders/${order.id}`, 'DELETE', { reason: 'Duplicate registration removed', confirmationAccession: order.accession_no, password: deletionPassword })).status, 204);
     assert.equal((await request(`/orders/${order.id}`)).status, 404);
     assert.equal((await request(`/orders/${order.id}/results`, 'PUT', { results: [{ id: resultId, value: '7' }] })).status, 404);
     assert.equal((await request('/worklist')).body.some((o) => o.id === order.id), false);
@@ -156,10 +175,24 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
       assert.equal(await page.getByLabel(/^Method/).first().inputValue(), 'Cyanide-free colorimetry');
       await page.getByRole('button', { name: 'Save investigation', exact: true }).click(); await page.getByText('Investigation updated.', { exact: false }).waitFor();
       const h360 = (await request('/profiles')).body.find((p) => p.code === 'CBC'); assert.equal(h360.parameters.length, 22); assert.ok(!h360.parameters.some((p) => ['NEUT', 'EOS', 'MONO', 'BASO'].includes(p.code)));
+      const browserDemoInput = { code: 'BROWSER_DELETE', name: 'Browser Delete Demo', department: 'Laboratory', parameters: [{ code: 'DEMO', name: 'Demo value', resultKind: 'TEXT', referenceRanges: [], selectOptions: [], commonValues: [], sortOrder: 1, active: true }] };
+      const browserDemo = await request('/catalogue/profiles', 'POST', browserDemoInput); assert.equal(browserDemo.status, 201);
+      await page.reload(); await page.getByRole('button', { name: 'Investigation catalogue' }).click();
+      await page.getByRole('button', { name: /Browser Delete Demo.*BROWSER_DELETE/ }).click();
+      await page.getByText('Investigation actions and history', { exact: true }).click();
+      await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+      await page.getByLabel('Confirm investigation code').fill('BROWSER_DELETE');
+      await page.getByLabel('Permanent deletion reason').fill('Remove browser demo test');
+      await page.getByRole('button', { name: 'Confirm permanent deletion', exact: true }).click();
+      await page.getByText('Browser Delete Demo was permanently deleted', { exact: false }).waitFor();
+      assert.equal((await request('/catalogue/profiles')).body.some((profile) => profile.id === browserDemo.body.id), false);
       await page.setViewportSize({ width: 390, height: 844 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
       await page.screenshot({ path: new URL('../test-results/catalogue-mobile.png', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), fullPage: false });
       assert.deepEqual(errors, []);
+    } catch (error) {
+      console.error(error);
+      throw error;
     } finally {
       await fs.mkdir(new URL('../test-results/', import.meta.url), { recursive: true });
       await context.tracing.stop({ path: new URL('../test-results/catalogue-trace.zip', import.meta.url).pathname.replace(/^\/(\w:)/, '$1') });

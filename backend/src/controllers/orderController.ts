@@ -2,6 +2,7 @@ import { ApiResponse } from '../core/ApiResponse.js';
 import { asyncHandler } from '../core/asyncHandler.js';
 import { requireUser } from '../middleware/auth.js';
 import * as service from '../services/orderWorkflowService.js';
+import type { DeleteReportInput } from '../schemas/orderSchemas.js';
 import type { SearchInput } from '../schemas/commonSchemas.js';
 import type { CreateOrderInput, SaveResultsInput, AmendmentInput, OrderIdsInput, RecordsExportInput, CsvImportInput, ChangeTestsInput, WorklistInput } from '../schemas/orderSchemas.js';
 
@@ -65,7 +66,7 @@ export const refreshOrderReferences = asyncHandler<AmendmentInput>(async (req, r
   ApiResponse.ok(await service.refreshOrderReferences(res.locals.input, req.params.id, requireUser(req))).send(res);
 });
 
-export const removeReport = asyncHandler<AmendmentInput>(async (req, res) => {
+export const removeReport = asyncHandler<DeleteReportInput>(async (req, res) => {
   await service.removeReport(res.locals.input, req.params.id, requireUser(req));
   ApiResponse.noContent(res);
 });

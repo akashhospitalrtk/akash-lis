@@ -4,5 +4,9 @@ backend/generated/
 .env
 *.log
 lis-backup.sql
+*.dump
+*.dump.sha256
+backups/*
+!backups/.gitkeep
 
 backend/test-results/

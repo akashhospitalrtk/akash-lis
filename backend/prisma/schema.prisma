@@ -215,6 +215,10 @@ model test_results {
 }
 
 model users {
+  /// Legacy SQL rows may be NULL; authentication falls back to the role column.
+  roles String[]
+  sensitive_failed_attempts Int @default(0)
+  sensitive_attempt_window DateTime? @db.Timestamptz(6)
   clinical_notes clinical_notes[]
   user_departments user_departments[]
   deleted_orders lab_orders[] @relation("lab_orders_deleted_byTousers")
@@ -260,6 +264,7 @@ enum user_role {
   AUTHORIZER
   DOCTOR
   IT
+  CATALOGUE_MANAGER
 }
 
 model departments {

@@ -1,10 +1,10 @@
-export type Role = 'ADMIN' | 'IT' | 'DOCTOR' | 'TECHNICIAN' | 'AUTHORIZER';
+export type Role = 'ADMIN' | 'IT' | 'DOCTOR' | 'TECHNICIAN' | 'AUTHORIZER' | 'CATALOGUE_MANAGER';
 export type ResultKind = 'NUMERIC' | 'TEXT' | 'POS_NEG' | 'SELECT';
 export type OrderStatus = 'PENDING' | 'COMPLETED' | 'AUTHORIZED';
 export type SampleStatus = 'REGISTERED' | 'COLLECTED' | 'IN_PROCESS' | 'RESULTS_PENDING' | 'APPROVED' | 'DELIVERED';
 
 export interface Department { id: string; name: string }
-export interface User { id: string; username: string; fullName: string; role: Role; designation?: string | null; departments?: Department[]; permissions?: string[] }
+export interface User { id: string; username: string; fullName: string; role: Role; roles?: Role[]; designation?: string | null; departments?: Department[]; permissions?: string[] }
 export interface ClinicalNote { id: string; author_id: string; author_name: string; author_designation?: string | null; body: string; created_at: string }
 export interface ProfileParameter {
   id: string; profile_id: string; code: string; name: string; result_kind: ResultKind; unit?: string | null;
