@@ -12,3 +12,4 @@ backups/*
 backend/test-results/
 backend/assets/database/
 .vercel/
+lis-1.1.0-images.tar
