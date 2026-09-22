@@ -332,6 +332,8 @@ input[data-result-input][type="number"]::-webkit-outer-spin-button { margin: 0; 
 .range-grid { grid-template-columns: minmax(110px, 1.4fr) minmax(95px, 1fr) repeat(2, minmax(75px, .7fr)) minmax(90px, .8fr) repeat(2, minmax(75px, .7fr)) auto; }
 .entry-reference small { display: block; white-space: pre-wrap; margin-top: .4rem; }
 .order-actions { margin: 1rem 0; }
+.patient-details-editor { margin-bottom: .75rem; }
+.patient-details-editor fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .order-action-panel { margin-top: 1rem; padding: 1.2rem; display: grid; gap: 1rem; }
 .order-test-options { max-height: 260px; overflow: auto; display: grid; gap: .7rem; }
 .order-test-options label { display: flex; gap: .6rem; align-items: center; }

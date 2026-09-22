@@ -57,7 +57,7 @@ try {
   const orderId = new URL(labPage.url()).pathname.split('/')[2];
   const order = await api(`/orders/${orderId}`, 'GET', undefined, admin.token);
   assert.equal(order.sample_status, 'IN_PROCESS');
-  assert.equal(await labPage.getByRole('button', { name: 'Delete report', exact: true }).count(), 0);
+  assert.equal(await labPage.getByRole('button', { name: 'Delete registration', exact: true }).count(), 0);
   await labPage.locator('select[data-result-input]').first().selectOption('Negative');
   await labPage.getByRole('button', { name: 'Save results', exact: true }).click();
   await labPage.getByRole('button', { name: 'Authorize report', exact: true }).waitFor();
@@ -74,16 +74,16 @@ try {
   await labPage.goto(`${base}/register`); await labPage.getByRole('button', { name: 'Sample reception', exact: true }).waitFor();
   assert.equal(await labPage.getByRole('button', { name: 'Submit & enter values', exact: true }).count(), 0);
   await adminPage.goto(`${base}/orders/${orderId}/results`);
-  await adminPage.getByRole('button', { name: 'Delete report', exact: true }).click();
+  await adminPage.getByRole('button', { name: 'Delete registration', exact: true }).click();
   await adminPage.getByLabel('Confirm accession number', { exact: true }).fill(order.accession_no);
   await adminPage.getByLabel('Reason *', { exact: true }).fill('Synthetic report removal after test');
   await adminPage.getByLabel('Your administrator password', { exact: true }).fill('Wrong-password');
-  await adminPage.getByRole('button', { name: 'Confirm delete report', exact: false }).click();
+  await adminPage.getByRole('button', { name: 'Confirm delete registration', exact: false }).click();
   await adminPage.getByRole('alert').filter({ hasText: 'password confirmation failed' }).waitFor();
   assert.equal(await adminPage.getByLabel('Your administrator password', { exact: true }).inputValue(), '');
   await adminPage.screenshot({ path: fileURLToPath(new URL('../test-results/multi-role-delete-confirmation.png', import.meta.url)), fullPage: true });
   await adminPage.getByLabel('Your administrator password', { exact: true }).fill(password);
-  await adminPage.getByRole('button', { name: 'Confirm delete report', exact: false }).click();
+  await adminPage.getByRole('button', { name: 'Confirm delete registration', exact: false }).click();
   await adminPage.locator('.order-action-panel').waitFor({ state: 'hidden' });
   assert.ok((await pool.query('SELECT deleted_at FROM lab_orders WHERE id=$1', [orderId])).rows[0].deleted_at);
   assert.deepEqual(errors, []);

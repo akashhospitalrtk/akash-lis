@@ -13,7 +13,7 @@ import { useNavigation, type Page } from './hooks/useNavigation';
 import { hasPermission, hasRole, userRoleLabel } from './lib';
 import type { Hospital, Order, Profile, User } from './types';
 
-const defaultHospital = { name: 'Akash Diagnostic Center', address: '', phone: '' };
+const defaultHospital = { name: 'Laboratory', address: '', phone: '' };
 function homePage(user: User): Page {
   return hasRole(user, 'ADMIN', 'TECHNICIAN') ? 'register' : hasRole(user, 'AUTHORIZER') ? 'worklist' : hasRole(user, 'DOCTOR') ? 'patients' : hasPermission(user, 'catalogue.manage') ? 'catalogue' : 'users';
 }
@@ -120,13 +120,17 @@ export default function App() {
   ];
 
   return <div className="app-shell">
-    <header className="app-header">
-      <button className="brand" title={hospital.name} aria-label={`${hospital.name} home`} onClick={() => setPage(homePage(user))}><span aria-hidden="true">+</span><div><strong>AKASH</strong><small>Diagnostics</small></div></button>
-      <nav>{nav.filter((item) => canOpenPage(user, item.id)).map((item) => <button key={item.id} title={item.label} aria-label={item.label} className={page === item.id ? 'nav-active' : ''} onClick={() => setPage(item.id)}><NavIcon page={item.id} /><span>{item.shortLabel}</span></button>)}</nav>
-      <div className="user-menu"><span>{user.fullName}<small>{userRoleLabel(user)}</small></span><button className="text-button" onClick={logout}>Sign out</button></div>
-    </header>
+    <a className="skip-link" href="#workspace">Skip to workspace</a>
+    <aside className="app-sidebar" aria-label="Laboratory navigation">
+      <button className="brand" title={hospital.name} aria-label={`${hospital.name} home`} onClick={() => setPage(homePage(user))}><strong>{hospital.name}</strong><small>Laboratory information system</small></button>
+      <p className="nav-caption">Workspace</p>
+      <nav aria-label="Main navigation">{nav.filter((item) => canOpenPage(user, item.id)).map((item) => <button key={item.id} title={item.label} aria-label={item.label} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-active' : ''} onClick={() => setPage(item.id)}><NavIcon page={item.id} /><span>{item.shortLabel}</span></button>)}</nav>
+      <div className="user-menu"><div className="user-identity"><span className="user-avatar" aria-hidden="true">{user.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('')}</span><span>{user.fullName}<small>{userRoleLabel(user)}</small></span></div><button className="text-button" onClick={logout}>Sign out</button></div>
+    </aside>
+    <div className="app-workspace">
+    <header className="workspace-header"><div><p className="workspace-title">{nav.find((item) => item.id === page)?.shortLabel}</p><p className="workspace-subtitle">Laboratory workspace</p></div><time className="workspace-date" dateTime={new Date().toLocaleDateString('en-CA')}>{new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</time></header>
     {appError && <div className="app-error">{appError}<button onClick={() => setAppError('')}>×</button></div>}
-    <main>
+    <main id="workspace" tabIndex={-1}>
       {(page === 'exports' && !hasRole(user, 'ADMIN') || page === 'catalogue' && !hasPermission(user, 'catalogue.manage') || page === 'users' && !hasRole(user, 'ADMIN', 'IT')) && <section className="page empty-state"><h1>Access required</h1><button onClick={() => setPage(homePage(user))}>Go to your home page</button></section>}
       {orderLoading && <p className="page loading">Loading selected order…</p>}
       {page === 'patients' && hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER', 'DOCTOR') && <DoctorWorkspace key={orderId || 'patients'} user={user} orderId={orderId} onSelect={(id) => navigate('patients', id)} onReport={(id) => navigate('report', id)} />}
@@ -138,5 +142,6 @@ export default function App() {
       {page === 'catalogue' && hasPermission(user, 'catalogue.manage') && <InvestigationCatalogue onChanged={() => void loadProfiles()} />}
       {page === 'users' && hasRole(user, 'ADMIN', 'IT') && <UserAdmin currentUser={user} />}
     </main>
+    </div>
   </div>;
 }

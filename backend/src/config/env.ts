@@ -11,6 +11,7 @@ export const config = {
   isProduction,
   allowedOrigins: (env.CORS_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean),
   databaseSsl: env.DATABASE_SSL === 'true',
+  databasePoolMax: env.DATABASE_POOL_MAX,
   hospital: {
     name: env.HOSPITAL_NAME,
     address: env.HOSPITAL_ADDRESS || '',

@@ -11,7 +11,7 @@ export function permissionsFor(role: SessionUser['role'] | SessionUser['role'][]
   if (role === 'IT') return ['staff.manage'];
   if (role === 'CATALOGUE_MANAGER') return ['catalogue.manage', 'catalogue.delete'];
   if (role === 'DOCTOR') return [...doctorPermissions];
-  if (role === 'AUTHORIZER') return ['patient.view', 'status.view', 'result.view', 'report.print', 'report.download', 'result.authorize'];
+  if (role === 'AUTHORIZER') return ['patient.view', 'status.view', 'result.view', 'report.print', 'report.download', 'result.authorize', 'report.delete'];
   if (role === 'TECHNICIAN') return ['patient.view', 'status.view', 'result.view', 'patient.register', 'result.enter'];
   return [];
 }

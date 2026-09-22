@@ -10,3 +10,5 @@ backups/*
 !backups/.gitkeep
 
 backend/test-results/
+backend/assets/database/
+.vercel/

@@ -4,13 +4,14 @@ import { catalogueTemplates, methodSuggestions } from '../catalogueTemplates';
 import catalogueGuide from '../../../docs/catalogue-setup.md?raw';
 import { formatDate } from '../lib';
 import type { Profile, ResultKind } from '../types';
-import { availableCode, blankProfile, emptyParameter, profileDraft, rangeSummary, type DraftProfile, type DraftParameter } from '../catalogueDraft';
+import { availableCode, blankProfile, emptyParameter, newParameterKey, profileDraft, rangeSummary, type DraftProfile, type DraftParameter } from '../catalogueDraft';
 import { ClinicalNotesEditor, type ClinicalNoteSuggestion } from './ClinicalNotesEditor';
 import { CustomSelect } from './CustomSelect';
 import { departmentSuggestions, specimenOptions } from '../catalogueOptions';
 import { ParameterEditor } from './ParameterEditor';
 
 type CatalogueAudit = { id: string; event_type: string; created_at: string; user_name?: string | null };
+const cataloguePageSize = 6;
 
 export function InvestigationCatalogue({ onChanged }: { onChanged: () => void }) {
   const [descriptions, setDescriptions] = useState<{ profiles: Record<string, ClinicalNoteSuggestion>; parameters: Record<string, ClinicalNoteSuggestion> }>({ profiles: {}, parameters: {} });
@@ -27,6 +28,7 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
   const profileCodeEdited = useRef(false);
   const dirty = JSON.stringify(draft) !== baseline;
   const [query, setQuery] = useState('');
+  const [cataloguePage, setCataloguePage] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const [audit, setAudit] = useState<CatalogueAudit[]>([]);
   const [error, setError] = useState('');
@@ -69,7 +71,7 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
     }, 0);
   }
   function addParameter(source?: DraftParameter) {
-    const parameter = source ? { ...structuredClone(source), id: undefined, clientKey: crypto.randomUUID(), active: true, codeEdited: true,
+    const parameter = source ? { ...structuredClone(source), id: undefined, clientKey: newParameterKey(), active: true, codeEdited: true,
       code: availableCode(source.code, draft.parameters.map((item) => item.code)), sortOrder: (draft.parameters.length + 1) * 10 } : { ...emptyParameter((draft.parameters.length + 1) * 10), resultKind: departmentSuggestions[draft.department]?.resultKind || 'NUMERIC', method: departmentSuggestions[draft.department]?.method || '', selectOptions: departmentSuggestions[draft.department]?.resultKind === 'POS_NEG' ? ['Negative', 'Positive'] : [] };
     setDraft((current) => ({ ...current, parameters: current.parameters.length === 1 && !current.parameters[0].id && !current.parameters[0].name && !current.parameters[0].code && !current.parameters[0].method && !current.parameters[0].unit ? [parameter] : [...current.parameters, parameter] }));
     setShowReuse(false); setReuseQuery(''); setMessage(''); focusParameter(parameter.clientKey);
@@ -92,7 +94,7 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
     if (!canDiscard()) return;
     const copy = structuredClone(draft);
     copy.name = `${copy.name} (copy)`; copy.code = availableCode(`${copy.code}_COPY`, profiles.map((profile) => profile.code));
-    copy.parameters = copy.parameters.filter((parameter) => parameter.active).map((parameter) => ({ ...parameter, id: undefined, clientKey: crypto.randomUUID() }));
+    copy.parameters = copy.parameters.filter((parameter) => parameter.active).map((parameter) => ({ ...parameter, id: undefined, clientKey: newParameterKey() }));
     setSelectedId(null); setDraft(copy); setBaseline(JSON.stringify(blankProfile())); setAudit([]); setError(''); setExpandedKey(null);
     profileCodeEdited.current = true; setMessage('Investigation copied into a new draft. Review the name and code, then create it.');
   }
@@ -138,6 +140,10 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
     const matches = `${profile.code} ${profile.name} ${profile.department}`.toLowerCase().includes(query.trim().toLowerCase());
     return matches && (showArchived || profile.active !== false);
   }), [profiles, query, showArchived]);
+  const pageCount = Math.max(1, Math.ceil(listed.length / cataloguePageSize));
+  const currentPage = Math.min(cataloguePage, pageCount - 1);
+  const firstListed = currentPage * cataloguePageSize;
+  const visibleProfiles = listed.slice(firstListed, firstListed + cataloguePageSize);
 
   function choose(profile: Profile) {
     if (busy || !canDiscard()) return;
@@ -243,7 +249,18 @@ export function InvestigationCatalogue({ onChanged }: { onChanged: () => void })
     </details>
     <datalist id="catalogue-methods">{methodSuggestions.map((method) => <option key={method} value={method} />)}</datalist>
     <div className="catalogue-layout">
-      <aside className="card catalogue-list"><div className="section-title"><h2>Available tests</h2><span>{profiles.filter((profile) => profile.active !== false).length} active</span></div><input aria-label="Search investigations" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, code or department" /><label className="archive-toggle"><input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> Show archived</label><div className="catalogue-items">{listed.length ? listed.map((profile) => <button type="button" key={profile.id} className={`catalogue-item ${selectedId === profile.id ? 'selected' : ''}`} onClick={() => choose(profile)}><span><strong>{profile.name}</strong><small>{profile.code} · {profile.department}</small></span><em className={profile.active === false ? 'archived' : ''}>{profile.active === false ? 'Archived' : `${profile.parameters.filter((parameter) => parameter.active !== false).length} fields`}</em></button>) : <p className="muted">No investigations found.</p>}</div></aside>
+      <aside className="card catalogue-list">
+        <div className="section-title"><h2>Available tests</h2><span>{profiles.filter((profile) => profile.active !== false).length} active</span></div>
+        <input aria-label="Search investigations" value={query} onChange={(event) => { setQuery(event.target.value); setCataloguePage(0); }} placeholder="Search name, code or department" />
+        <label className="archive-toggle"><input type="checkbox" checked={showArchived} onChange={(event) => { setShowArchived(event.target.checked); setCataloguePage(0); }} /> Show archived</label>
+        <p className="catalogue-result-count" role="status">{listed.length ? `${firstListed + 1}–${Math.min(firstListed + cataloguePageSize, listed.length)} of ${listed.length}${query.trim() ? ' matches' : ' tests'}` : 'No matching tests'}</p>
+        <div className="catalogue-items">{visibleProfiles.length ? visibleProfiles.map((profile) => <button type="button" key={profile.id} className={`catalogue-item ${selectedId === profile.id ? 'selected' : ''}`} onClick={() => choose(profile)}><span><strong>{profile.name}</strong><small>{profile.code} · {profile.department}</small></span><em className={profile.active === false ? 'archived' : ''}>{profile.active === false ? 'Archived' : `${profile.parameters.filter((parameter) => parameter.active !== false).length} fields`}</em></button>) : <p className="muted">Try a different name, code or department.</p>}</div>
+        <nav className="catalogue-pagination" aria-label="Investigation pages">
+          <button type="button" className="secondary" aria-label="Previous tests" disabled={currentPage === 0} onClick={() => setCataloguePage(currentPage - 1)}>Previous</button>
+          <span>{currentPage + 1} / {pageCount}</span>
+          <button type="button" className="secondary" aria-label="Next tests" disabled={currentPage >= pageCount - 1} onClick={() => setCataloguePage(currentPage + 1)}>Next</button>
+        </nav>
+      </aside>
       <form ref={formRef} className="card catalogue-editor" onSubmit={save} noValidate>
         <fieldset className="catalogue-form-fields" disabled={busy}>
         <div className="section-title"><div><h2>{selectedId ? 'Edit investigation' : 'New investigation'}</h2><span>{selectedId ? 'Codes are editable. Update analyzer / CSV mappings when you rename a code; existing orders retain their snapshot.' : 'Use a short code that is unique in your laboratory.'}</span></div>{selected && <span className={`status ${selected.active === false ? 'status-pending' : 'status-authorized'}`}>{selected.active === false ? 'archived' : 'active'}</span>}</div>

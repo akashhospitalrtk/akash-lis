@@ -1,7 +1,15 @@
 import pg, { type PoolClient } from 'pg';
 import { config } from '../config/env.js';
+import { attachDatabasePool } from '@vercel/functions';
 
-export const pool = new pg.Pool({ connectionString: config.databaseUrl, ssl: config.databaseSsl ? { rejectUnauthorized: true } : undefined });
+export const pool = new pg.Pool({
+  connectionString: config.databaseUrl,
+  ssl: config.databaseSsl ? { rejectUnauthorized: true } : undefined,
+  max: config.databasePoolMax,
+  idleTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000
+});
+if (process.env.VERCEL === '1') attachDatabasePool(pool);
 
 pool.on('error', (error) => {
   console.error('Unexpected PostgreSQL pool error', error);

@@ -1,0 +1,10 @@
+{
+  "description": "Streamlines laboratory information management with a modern, user-friendly interface designed to enhance efficiency and accuracy for lab professionals.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { config } from '../config/env.js';
 import { matchingRange } from './resultService.js';
 import type { getOrderDetails } from './orderService.js';
@@ -9,9 +10,9 @@ type ReportData = Omit<NonNullable<Awaited<ReturnType<typeof getOrderDetails>>>,
   authorized_by_name?: string; authorized_by_designation?: string; authorized_signature_label?: string;
 };
 function fontFile(name: string) {
-  const file = [new URL(`../../assets/fonts/${name}`, import.meta.url), new URL(`../../../assets/fonts/${name}`, import.meta.url)].find(existsSync);
+  const file = [new URL(`../../assets/fonts/${name}`, import.meta.url), new URL(`../../../assets/fonts/${name}`, import.meta.url), resolve(process.cwd(), 'assets/fonts', name)].find(existsSync);
   if (!file) throw new Error(`Missing report font ${name}`);
-  return fileURLToPath(file);
+  return typeof file === 'string' ? file : fileURLToPath(file);
 }
 function date(value: Date | string | null) {
   return value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(value)) + ' IST' : '-';

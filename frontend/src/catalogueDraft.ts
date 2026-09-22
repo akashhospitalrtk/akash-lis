@@ -9,8 +9,15 @@ export type DraftProfile = {
   description: string; code: string; name: string; department: string; specimenType: string; turnaroundTime: string; instructions: string; parameters: DraftParameter[];
 };
 
+let nextParameterKey = 0;
+// These keys identify unsaved editor rows only, not database records or credentials.
+// A page-local counter also works on LAN HTTP, where crypto.randomUUID is unavailable.
+export function newParameterKey(): string {
+  return `draft-parameter-${++nextParameterKey}`;
+}
+
 export function emptyParameter(sortOrder: number): DraftParameter {
-  return { description: '', clientKey: crypto.randomUUID(), loincCode: '', referenceNote: '', code: '', name: '', resultKind: 'NUMERIC', unit: '', method: '', referenceRanges: [], selectOptions: [], commonValues: [], calculationFormula: '', suggestedValue: '', numericStep: '', sliderMin: '', sliderMax: '', criticalLow: '', criticalHigh: '', sortOrder, active: true };
+  return { description: '', clientKey: newParameterKey(), loincCode: '', referenceNote: '', code: '', name: '', resultKind: 'NUMERIC', unit: '', method: '', referenceRanges: [], selectOptions: [], commonValues: [], calculationFormula: '', suggestedValue: '', numericStep: '', sliderMin: '', sliderMax: '', criticalLow: '', criticalHigh: '', sortOrder, active: true };
 }
 export function blankProfile(): DraftProfile {
   return { description: '', code: '', name: '', department: 'Laboratory', specimenType: '', turnaroundTime: '', instructions: '', parameters: [emptyParameter(10)] };

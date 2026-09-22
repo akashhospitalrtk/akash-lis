@@ -31,6 +31,7 @@ export interface ReportAmendment {
   started_by_name?: string | null; reauthorized_by_name?: string | null;
 }
 export interface Order {
+  updated_at?: string;
   clinical_notes?: ClinicalNote[];
   id: string; accession_no: string; patient_source: string; external_patient_id?: string | null; uhid?: string | null;
   patient_name: string; age_value?: number | null; age_unit?: AgeUnit; age_years?: number | null; gender?: string | null; mobile?: string | null; referring_doctor?: string | null;

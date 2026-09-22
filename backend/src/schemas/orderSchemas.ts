@@ -18,11 +18,20 @@ export const createOrderSchema = patientSchema.extend({ entryMode: z.enum(['SAMP
 export const resultSchema = z.object({ id: z.string().uuid(), value: z.string().max(200).nullable().optional(), comments: z.string().max(400).nullable().optional() });
 export const testRemarksSchema = z.object({ id: z.string().uuid(), remarks: z.string().max(2000).nullable().optional() });
 export const amendmentSchema = z.object({ reason: z.string().trim().min(5, 'Enter a clear amendment reason (at least 5 characters).').max(500) });
+export const updatePatientSchema = patientSchema.pick({
+  patientName: true, uhid: true, gender: true, mobile: true, referringDoctor: true, patientType: true
+}).extend({
+  ageValue: z.number().finite().min(0).nullable(),
+  ageUnit: z.enum(['days', 'weeks', 'months', 'years']),
+  reason: amendmentSchema.shape.reason,
+  expectedUpdatedAt: z.string().datetime()
+}).strict().refine(({ ageValue, ageUnit }) => ageValue === null || ageValue * ({ days: 1, weeks: 7, months: 365.25 / 12, years: 365.25 }[ageUnit]) <= 130 * 365.25,
+  { path: ['ageValue'], message: 'Age must not exceed 130 years in the selected unit.' });
+export type UpdatePatientInput = z.infer<typeof updatePatientSchema>;
 export const deleteReportSchema = z.object({
-  reason: z.string().trim().min(10, 'Explain why this record must be removed (at least 10 characters).').max(500),
-  confirmationAccession: z.string().trim().min(1).max(40),
-  password: z.string().min(1).max(200)
-});
+  reason: z.string().trim().max(500).optional(),
+  password: z.string().max(200).optional()
+}).default({});
 export type DeleteReportInput = z.infer<typeof deleteReportSchema>;
 export const orderIdsSchema = z.object({ orderIds: z.array(z.string().uuid()).min(1).max(100) });
 export const recordsExportSchema = z.object({

@@ -32,6 +32,8 @@ The catalogue is intentionally administrator-only. Test and parameter codes are 
 
 ## Run
 
+For cloud hosting, see [the Vercel deployment guide](docs/vercel-deployment.md). It configures separate frontend/API projects with hosted PostgreSQL; the Docker instructions below remain the local hospital setup.
+
 1. Create the root environment file and replace its `JWT_SECRET` placeholder with a unique random value of at least 32 characters. Docker Compose runs the backend in production mode and will deliberately refuse to start with the placeholder secret:
 
    ```bash

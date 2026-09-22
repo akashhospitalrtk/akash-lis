@@ -7,6 +7,7 @@ export const envSchema = z.object({
   JWT_SECRET: z.string().min(1).default('development-only-secret'),
   CORS_ORIGIN: z.string().optional(),
   DATABASE_SSL: z.enum(['true', 'false']).default('false'),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   HOSPITAL_NAME: z.string().default('Akash Diagnostic Center'),
   HOSPITAL_ADDRESS: z.string().default('Bhiwani Chungi, Bhiwani Road, Rohtak 124001, Haryana'),
   HOSPITAL_PHONE: z.string().default('7206620626'),

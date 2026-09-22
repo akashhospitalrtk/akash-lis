@@ -21,3 +21,6 @@ export function createApp() {
   app.use(errorHandler);
   return app;
 }
+
+// Vercel imports this app without starting a listener or running migrations.
+export default createApp();

@@ -34,7 +34,7 @@ try {
   await page.getByRole('heading', { name: 'Find or register a patient' }).waitFor();
   await page.goto(`${base}/orders/${order.id}/results`);
   await page.getByRole('button', { name: 'Amend report', exact: true }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Delete report', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Delete registration', exact: true }).count(), 0);
   await page.reload(); await page.getByRole('button', { name: 'Amend report', exact: true }).waitFor();
   await page.screenshot({ path: fileURLToPath(new URL('../test-results/multi-role-docker.png', import.meta.url)), fullPage: true });
   assert.deepEqual(errors, []);

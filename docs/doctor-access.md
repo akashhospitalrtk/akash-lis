@@ -24,6 +24,22 @@ Roles, department membership and active status are read from the database on eve
 
 ## Clinical notes and reports
 
+### Administrator patient corrections and demo registrations
+
+In **Patients**, administrators see **Manage patient**. Open a registration to use **Edit patient details**, **Change tests**, or **Delete registration**. Patient details can also be edited from the result-entry screen. Other roles retain their existing access.
+
+Patient corrections update only that LIS order's name, UHID, age/unit, sex, mobile, referring doctor and patient type. The accession, registration timestamp, HMS link, other registrations and external HMS database are unchanged. A reason is required; the previous/new details and any changed result flags are recorded in the order audit. Age/sex corrections recalculate flags using the saved reference ranges without changing measured values. Concurrent/stale edits are rejected with instructions to refresh.
+
+Published reports require **View results & report → Amend & edit values** before patient details can change. The original report snapshot is retained and the correction requires reauthorization.
+
+**Delete registration** requires the administrator's current password, exact accession and a reason. Mistaken/demo entries disappear from active patient searches and worklists. This archives a draft or voids a released report; clinical records and audit history remain stored. The action affects one registration, not every order for the patient or the HMS patient master.
+
+The new API is `PUT /api/orders/:id/patient` (ADMIN only). Submit `patientName`, `uhid`, `ageValue` (number or null), `ageUnit`, `gender`, `mobile`, `referringDoctor`, `patientType`, `reason`, and `expectedUpdatedAt` from the latest order response. `DELETE /api/orders/:id` remains the protected removal endpoint.
+
+Source changes require new backend and frontend images; existing loaded image archives do not update automatically. Back up the running deployment before applying an updated release. No schema migration changes are required for this feature.
+
+Regression checks: `patient-registration.integration.test.js` covers permissions, validation, demographic corrections, flag recalculation, concurrency, amendment snapshots and removal. `patient-registration-browser.mjs` exercises the real UI/API against a disposable local `_test` database; set `PLAYWRIGHT_MODULE_PATH` and optionally `BROWSER_EXECUTABLE_PATH`. Run these through `test/run-access-regression.mjs` with an isolated test-server connection, never the hospital database.
+
 Notes are append-only entries linked to a lab order (patient snapshot), not a full longitudinal EMR. Corrections use a new note referring to the earlier entry. Author name/designation are captured at creation. Notes can be written before release, but draft lab values remain hidden from doctors. Report print/download includes all notes present when generated. Notes added after laboratory authorization are clearly identified as independently authored clinical notes; laboratory authorization covers laboratory results, not later notes. Existing downloaded copies remain unchanged.
 
 ## Async operation handling

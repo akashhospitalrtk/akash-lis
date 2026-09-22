@@ -99,7 +99,7 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await page.screenshot({ path: 'test-results/revision-results-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole('button', { name: 'Delete report', exact: true }).click(); await page.getByLabel('Reason *', { exact: true }).fill('Remove synthetic duplicate'); await page.getByLabel('Confirm accession number', { exact: true }).fill(order.accession_no); await page.getByLabel('Your administrator password', { exact: true }).fill('Synthetic-password-only'); await page.getByRole('button', { name: 'Confirm delete report' }).click();
+  await page.getByRole('button', { name: 'Delete registration', exact: true }).click(); await page.getByLabel('Reason *', { exact: true }).fill('Remove synthetic duplicate'); await page.getByLabel('Confirm accession number', { exact: true }).fill(order.accession_no); await page.getByLabel('Your administrator password', { exact: true }).fill('Synthetic-password-only'); await page.getByRole('button', { name: 'Confirm delete registration' }).click();
   await page.getByRole('button', { name: 'Investigation catalogue', exact: true }).click();
   const note = page.getByLabel(/^Reference \/ interpretation note/);
   assert.ok(await note.isDisabled());
