@@ -2,8 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm ci --include=dev",
   "buildCommand": "npm run prisma:generate && node scripts/prepare-vercel.mjs",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "functions": {
-    "src/app.ts": {
+    "api/index.ts": {
       "includeFiles": "assets/**",
       "maxDuration": 60
     }
