@@ -29,7 +29,7 @@ export function allowRoles(...roles: SessionUser['role'][]): RequestHandler {
   };
 }
 
-export function requireUser(req: Pick<Request, 'user'>): SessionUser {
+export function requireUser(req: { user?: SessionUser }): SessionUser {
   if (!req.user) throw AppError.unauthorized();
   return req.user;
 }
