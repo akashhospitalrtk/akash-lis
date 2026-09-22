@@ -2,6 +2,7 @@ node_modules/
 dist/
 backend/generated/
 .env
+.env.vercel
 *.log
 lis-backup.sql
 *.dump
