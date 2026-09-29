@@ -283,3 +283,13 @@ CREATE TABLE IF NOT EXISTS clinical_notes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS clinical_notes_order_idx ON clinical_notes(order_id, created_at, id);
+
+-- Shared print/PDF design, with optimistic revisions and system-audit history.
+CREATE TABLE IF NOT EXISTS report_template (
+  id SMALLINT PRIMARY KEY CHECK (id = 1),
+  template JSONB NOT NULL DEFAULT '{}'::jsonb,
+  revision INTEGER NOT NULL DEFAULT 0,
+  updated_by UUID REFERENCES users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO report_template (id) VALUES (1) ON CONFLICT (id) DO NOTHING;

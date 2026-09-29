@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Page = 'worklist' | 'register' | 'entry' | 'report' | 'catalogue' | 'users' | 'exports' | 'patients';
+export type Page = 'worklist' | 'register' | 'entry' | 'report' | 'catalogue' | 'users' | 'exports' | 'patients' | 'report-design';
 type Location = { page: Page; orderId?: string };
-const paths: Record<Page, string> = { patients: '/patients', register: '/register', worklist: '/samples', entry: '/results', report: '/reports', catalogue: '/tests', users: '/team', exports: '/records' };
+const paths: Record<Page, string> = { patients: '/patients', register: '/register', worklist: '/samples', entry: '/results', report: '/reports', catalogue: '/tests', users: '/team', exports: '/records', 'report-design': '/report-design' };
 
 function readLocation(): Location {
   const patient = location.pathname.match(/^\/patients\/orders\/([a-zA-Z0-9-]+)\/?$/);

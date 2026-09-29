@@ -1,0 +1,32 @@
+{
+  "brandName": "AKASH",
+  "subtitle": "Diagnostic Center",
+  "address": "Bhiwani Chungi, Bhiwani Road,\nRohtak-124001 Haryana",
+  "phone": "7206620626",
+  "locationLine": "Inside Akash Hospital",
+  "bandColor": "#6568a1",
+  "bandTextColor": "#afd6e2",
+  "helplineColor": "#ab574e",
+  "headerHeightMm": 38,
+  "footerHeightMm": 34,
+  "bodyFontPt": 9,
+  "watermarkOpacity": 0.055,
+  "patientLayout": "three-column",
+  "dateStyle": "date-time",
+  "showSampleDates": true,
+  "showBadge": true,
+  "supportLine": "In Case of any unexpected Result kindly Contact the Lab",
+  "servicesLine": "T3, T4, FSH, LH, PROLACTIN, β-HCG, PSA, CA-125, PROGESTERONE, HbA.C ( Reports on Same Day)",
+  "facilitiesLine": "SAMPLE COLLECTION, ECG AT HOME & AMBULANCE FACILITY AVAILABLE",
+  "disclaimerLines": [
+    "This report is for doctor’s perusal only and only for medico legal Purpose. This report is only professional opinion and not a diagnosis",
+    "Identify of patient cannot be informed",
+    "We hold no Liability due to failure medical technology or drug reaction or danger inherent in carrying out Investigations"
+  ],
+  "labels": {
+    "name": "Name", "ageGender": "Age / Gender", "referringDoctor": "Ref. Dr.",
+    "mobile": "Mobile", "patientType": "Patient type", "uhid": "UHID / Patient ID",
+    "accession": "Report / SID No.", "registered": "Reg. Date", "reported": "Rep. Date",
+    "collected": "Sample collected", "received": "Sample received"
+  }
+}

@@ -5,6 +5,8 @@ import { InvestigationCatalogue } from './components/InvestigationCatalogue';
 import { RegisterOrder } from './components/RegisterOrder';
 import { RecordsExport } from './components/RecordsExport';
 import { Report } from './components/Report';
+import { ReportDesign } from './components/ReportDesign';
+import type { ReportTemplateRecord } from './reportTemplate';
 import { ResultEntry } from './components/ResultEntry';
 import { UserAdmin } from './components/UserAdmin';
 import { Worklist } from './components/Worklist';
@@ -28,6 +30,7 @@ function canOpenPage(user: User, page: Page) {
 
 function NavIcon({ page }: { page: Page }) {
   const icon = {
+    'report-design': <><rect x="4" y="3" width="16" height="18" rx="1" /><path d="M4 8h16M4 17h16M8 11h3M8 14h8" /></>,
     patients: <><circle cx="12" cy="8" r="3" /><path d="M5 21v-3a7 7 0 0 1 14 0v3M4 4h3M5.5 2.5v3" /></>,
     register: <><circle cx="12" cy="8" r="3" /><path d="M5.5 20c.5-3.2 2.7-5 6.5-5s6 1.8 6.5 5M19 8v5M16.5 10.5h5" /></>,
     worklist: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4.5h6M8.5 10h7M8.5 14h7M8.5 18h4" /></>,
@@ -51,6 +54,15 @@ export default function App() {
   const setPage = (next: Page) => navigate(next, (next === 'entry' || next === 'report') ? selectedOrder?.id : undefined);
   const [worklistVersion, setWorklistVersion] = useState(0);
   const [appError, setAppError] = useState('');
+  const [reportTemplate, setReportTemplate] = useState<ReportTemplateRecord | null>(null);
+
+  useEffect(() => {
+    if (!user || !['report', 'report-design'].includes(page)) return;
+    let active = true;
+    setReportTemplate(null);
+    void api<ReportTemplateRecord>('/report-template').then(data => { if (active) setReportTemplate(data); }).catch((error: Error) => { if (active) setAppError(`Report design could not be loaded: ${error.message}`); });
+    return () => { active = false; };
+  }, [user?.id, page, orderId]);
 
   useEffect(() => {
     const expired = () => { setUser(null); setSelectedOrder(null); setAppError(''); };
@@ -117,6 +129,7 @@ export default function App() {
     { id: 'exports', label: 'Records export', shortLabel: 'Records' },
     { id: 'catalogue', label: 'Investigation catalogue', shortLabel: 'Tests' },
     { id: 'users', label: 'Staff and departments', shortLabel: 'Team' }
+    ,{ id: 'report-design', label: 'Report design', shortLabel: 'Report design' }
   ];
 
   return <div className="app-shell">
@@ -137,7 +150,9 @@ export default function App() {
       {page === 'worklist' && hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER') && <Worklist onOpen={openOrder} reloadKey={worklistVersion} user={user} />}
       {page === 'register' && hasRole(user, 'ADMIN', 'TECHNICIAN') && <RegisterOrder profiles={profiles} onCreated={created} />}
       {page === 'entry' && hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER') && !orderLoading && <ResultEntry key={orderId || 'no-order'} onDeleted={() => { setSelectedOrder(null); setWorklistVersion((v) => v + 1); setPage('worklist'); }} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} user={user} onUpdated={updateOrder} onReport={() => setPage('report')} />}
-      {page === 'report' && hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER', 'DOCTOR') && !orderLoading && <Report key={orderId || 'no-order'} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} hospital={hospital} user={user} onUpdated={updateOrder} onBack={() => !hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER') ? navigate('patients', orderId) : setPage('entry')} />}
+      {page === 'report' && hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER', 'DOCTOR') && !orderLoading && reportTemplate && <Report key={orderId || 'no-order'} order={orderId && selectedOrder?.id === orderId ? selectedOrder : null} hospital={hospital} template={reportTemplate.template} user={user} onUpdated={updateOrder} onBack={() => !hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER') ? navigate('patients', orderId) : setPage('entry')} />}
+      {['report', 'report-design'].includes(page) && !reportTemplate && <p className="page loading">Loading report design…</p>}
+      {page === 'report-design' && hasRole(user, 'ADMIN') && reportTemplate && <ReportDesign record={reportTemplate} hospital={hospital} user={user} onSaved={setReportTemplate} />}
       {page === 'exports' && hasRole(user, 'ADMIN') && <RecordsExport />}
       {page === 'catalogue' && hasPermission(user, 'catalogue.manage') && <InvestigationCatalogue onChanged={() => void loadProfiles()} />}
       {page === 'users' && hasRole(user, 'ADMIN', 'IT') && <UserAdmin currentUser={user} />}

@@ -18,5 +18,6 @@ import '@fontsource/jetbrains-mono/latin-600.css';
 import App from './App';
 import './styles.css';
 import './theme.css';
+import './report-letterhead.css';
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);

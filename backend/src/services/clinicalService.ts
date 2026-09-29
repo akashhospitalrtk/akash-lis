@@ -6,6 +6,7 @@ import { getOrderDetails } from './orderService.js';
 import { listClinicalNotes } from './clinicalNoteService.js';
 import { addAudit } from './auditService.js';
 import { makeReportPdf } from './reportPdfService.js';
+import { getReportTemplate } from './reportTemplateService.js';
 
 // Explicit projection: statuses/patient identifiers are visible before publication;
 // draft values, lab comments, audit payloads and amendment snapshots never are.
@@ -68,5 +69,6 @@ export async function publishedReport(id: string, user: SessionUser, action: 'RE
 export async function downloadReport(id: string, user: SessionUser) {
   // Recheck publication under a lock and capture one consistent report version.
   const report = await publishedReport(id, user, 'REPORT_DOWNLOADED');
-  return { filename: `${report.accession_no}.pdf`, bytes: await makeReportPdf(report) };
+  const { template } = await getReportTemplate();
+  return { filename: `${report.accession_no}.pdf`, bytes: await makeReportPdf(report, template) };
 }

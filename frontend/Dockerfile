@@ -5,6 +5,7 @@ ENV VITE_API_URL=$VITE_API_URL
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+COPY backend/src/config/reportTemplate.defaults.json /backend/src/config/reportTemplate.defaults.json
 COPY docs/catalogue-setup.md /docs/catalogue-setup.md
 RUN npm run build
 

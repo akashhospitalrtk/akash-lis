@@ -5,24 +5,14 @@ import { flushSync } from 'react-dom';
 import { DoctorNotes } from './DoctorNotes';
 import { formatAge, formatDate, isDetailOrder, referenceText, hasRole } from '../lib';
 import type { Hospital, Order, User } from '../types';
-
-function BrandMark() {
-  return <svg className="report-brand-mark" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" /><path d="M24 12v24M12 24h24" /><path d="M17 36 24 12l7 24" /></svg>;
-}
-
-function PhoneIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.3 3.8 9.6 3l1.9 4.7-1.7 1.5a15.3 15.3 0 0 0 5 5l1.5-1.7L21 14.4l-.8 2.3c-.4 1.1-1.6 1.8-2.8 1.6C10.3 17.2 6.8 13.7 5.7 6.6 5.5 5.4 6.2 4.2 7.3 3.8Z" /></svg>;
-}
-
-function LocationIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-6.1 6-11a6 6 0 1 0-12 0c0 4.9 6 11 6 11Z" /><circle cx="12" cy="10" r="2" /></svg>;
-}
+import { defaultReportTemplate, reportDate, type ReportTemplate } from '../reportTemplate';
+import { LetterheadHeader, LetterheadFooter, templateStyle } from './ReportLetterhead';
 
 function PatientDetail({ label, value, primary = false }: { label: string; value: string; primary?: boolean }) {
   return <div className={`report-patient-row${primary ? ' report-patient-name' : ''}`}><dt>{label}</dt><span aria-hidden="true">:</span><dd>{value}</dd></div>;
 }
 
-export function Report({ order, hospital, user, onUpdated, onBack }: { order: Order | null; hospital: Hospital; user: User; onUpdated: (order: Order) => void; onBack: () => void }) {
+export function Report({ order, hospital, user, onUpdated, onBack, template = defaultReportTemplate, designPreview = false }: { order: Order | null; hospital: Hospital; user: User; onUpdated: (order: Order) => void; onBack: () => void; template?: ReportTemplate; designPreview?: boolean }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [showAmendment, setShowAmendment] = useState(false);
@@ -79,54 +69,65 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
     }
   }
 
-  return <section className="page report-page">
-    <div className="report-actions">
+  const labels = template.labels;
+  return <section className={`page report-page${designPreview ? ' report-design-preview' : ''}`} style={templateStyle(template)}>
+    <style>{`@media print { @page { size: A4; margin: ${template.headerHeightMm + 6}mm 0 ${template.footerHeightMm + 6}mm; } }`}</style>
+    {!designPreview && <div className="report-actions">
       <button className="secondary" onClick={onBack}>{!hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER') ? 'Back to patient' : detailed.status !== 'AUTHORIZED' && hasRole(user, 'ADMIN', 'TECHNICIAN') ? 'Edit values' : 'Back to entry'}</button>
       {detailed.status === 'AUTHORIZED' && hasRole(user, 'ADMIN', 'AUTHORIZER') && <button className="secondary" disabled={busy} onClick={() => setShowAmendment(true)}>Amend &amp; edit values</button>}
       <span>{detailed.status === 'AUTHORIZED' ? amendmentNo ? `Authorized amended report - Revision ${amendmentNo}` : 'Authorized report' : amendmentNo ? `Amendment ${amendmentNo} is awaiting authorization.` : 'Preview only - authorization is required before printing.'}</span>
       {canDeliver && <button className="secondary" onClick={() => void deliver()} disabled={busy}>Mark delivered</button>}
       {canPrint && <><button className="secondary" onClick={() => void downloadPdf()} disabled={busy}>Download PDF</button><button onClick={() => void print()} disabled={busy}>Print report</button></>}
-    </div>
+    </div>}
     {error && <p className="form-error">{error}</p>}
 
     {showAmendment && <form className="amendment-panel" onSubmit={(event) => { event.preventDefault(); void amendAndEdit(); }}><h2>Amend report to edit values</h2><p>The authorized version is preserved. Corrected results must be saved and authorized again.</p><label className="field"><span>Amendment reason *</span><textarea required minLength={5} maxLength={500} value={amendmentReason} onChange={(event) => setAmendmentReason(event.target.value)} /></label><div className="toolbar-actions"><button type="button" className="secondary" disabled={busy} onClick={() => setShowAmendment(false)}>Cancel</button><button disabled={busy}>Begin amendment &amp; edit</button></div></form>}
-    <article className="report-sheet">
-      <header className="report-header">
-        <div className="report-brand">
-          <BrandMark />
-          <div>
-            <p className="report-brand-name">AKASH</p>
-            <p className="report-brand-tagline">Diagnostic Center</p>
-          </div>
-        </div>
-        <div className="report-contact">
-          {hospital.phone && <p><PhoneIcon /> <span>{hospital.phone}</span></p>}
-          {hospital.address && <p><LocationIcon /> <span>{hospital.address}</span></p>}
-        </div>
-      </header>
+    <article className={`report-sheet patient-layout-${template.patientLayout}`}>
+      <LetterheadHeader template={template} />
+      <img className="letterhead-watermark" src="/letterhead/emblem.svg" alt="" />
+      <div className="report-body">
 
       <div className="report-document-bar">
         <div><p>{amendmentNo ? 'Amended laboratory report' : 'Laboratory report'}</p><strong>{detailed.accession_no}</strong></div>
         <span className={detailed.status === 'AUTHORIZED' ? 'report-issued' : 'report-preview'}>{detailed.status === 'AUTHORIZED' ? 'Authorized' : 'Preview'}</span>
       </div>
 
-      <section className="report-patient" aria-label="Patient and sample details">
+      {template.patientLayout === 'three-column' ? <section className="report-patient report-patient-three" aria-label="Patient and sample details">
         <dl className="report-patient-column">
-          <PatientDetail label="Patient name" value={detailed.patient_name} primary />
-          <PatientDetail label="Age / Gender" value={[formatAge(detailed), detailed.gender].filter(Boolean).join(' / ') || '-'} />
-          <PatientDetail label="Accession / SID" value={detailed.accession_no} />
-          <PatientDetail label="Referring doctor" value={detailed.referring_doctor || '-'} />
-          <PatientDetail label="Patient type" value={detailed.patient_type || '-'} />
+          <PatientDetail label={labels.name} value={detailed.patient_name} primary />
+          <PatientDetail label={labels.ageGender} value={[formatAge(detailed), detailed.gender].filter(Boolean).join(' / ') || '-'} />
+          <PatientDetail label={labels.uhid} value={detailed.uhid || '-'} />
+          <PatientDetail label={labels.mobile} value={detailed.mobile || '-'} />
         </dl>
         <dl className="report-patient-column">
-          <PatientDetail label="Patient ID / UHID" value={detailed.uhid || '-'} />
-          <PatientDetail label="Registered" value={formatDate(detailed.sample_date, true)} />
+          <PatientDetail label={labels.referringDoctor} value={detailed.referring_doctor || '-'} primary />
+          <PatientDetail label={labels.patientType} value={detailed.patient_type || '-'} />
+          {template.showSampleDates && <PatientDetail label={labels.collected} value="Not recorded" />}
+        </dl>
+        <dl className="report-patient-column">
+          <PatientDetail label={labels.accession} value={detailed.accession_no} primary />
+          <PatientDetail label={labels.registered} value={reportDate(detailed.sample_date, template)} />
+          {template.showSampleDates && <PatientDetail label={labels.received} value={reportDate(detailed.sample_received_at, template)} />}
+          <PatientDetail label={labels.reported} value={detailed.authorized_at ? reportDate(detailed.authorized_at, template) : 'Pending authorization'} />
+        </dl>
+      </section> : <section className="report-patient" aria-label="Patient and sample details">
+        <dl className="report-patient-column">
+          <PatientDetail label={labels.name} value={detailed.patient_name} primary />
+          <PatientDetail label={labels.ageGender} value={[formatAge(detailed), detailed.gender].filter(Boolean).join(' / ') || '-'} />
+          <PatientDetail label={labels.referringDoctor} value={detailed.referring_doctor || '-'} />
+          <PatientDetail label={labels.mobile} value={detailed.mobile || '-'} />
+          <PatientDetail label={labels.patientType} value={detailed.patient_type || '-'} />
+          {template.showSampleDates && <PatientDetail label={labels.collected} value="Not recorded" />}
+        </dl>
+        <dl className="report-patient-column">
+          <PatientDetail label={labels.uhid} value={detailed.uhid || '-'} />
+          <PatientDetail label={labels.accession} value={detailed.accession_no} />
+          <PatientDetail label={labels.registered} value={reportDate(detailed.sample_date, template)} />
           {/* sample_date is the registration form's date, not a collection event. */}
-          <PatientDetail label="Sample collected" value="Not recorded" />
-          <PatientDetail label="Sample received" value={detailed.sample_received_at ? formatDate(detailed.sample_received_at, true) : 'Not recorded'} />
-          <PatientDetail label="Report date / time" value={detailed.authorized_at ? formatDate(detailed.authorized_at, true) : 'Pending authorization'} />
+          <PatientDetail label={labels.reported} value={detailed.authorized_at ? reportDate(detailed.authorized_at, template) : 'Pending authorization'} />
+          {template.showSampleDates && <PatientDetail label={labels.received} value={reportDate(detailed.sample_received_at, template)} />}
         </dl>
-      </section>
+      </section>}
 
       {detailed.tests.map((test) => {
         const legacyRemarks = test.results.filter((result) => result.comments).map((result) => `${result.parameter_name}: ${result.comments}`).join(' · ');
@@ -134,17 +135,16 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
         return <section className="report-test" key={test.id}>
           <h3>{test.profile_name}</h3>
           <table>
-            <thead><tr><th scope="col">Test name</th><th scope="col">Value</th><th scope="col">Unit</th><th scope="col">Reference range</th><th scope="col">Flag</th></tr></thead>
+            <thead><tr><th scope="col">Test name</th><th scope="col">Value</th><th scope="col">Unit</th><th scope="col">Ref. range</th></tr></thead>
             <tbody>{test.results.map((result) => {
               const flag = result.abnormal_flag || 'Normal';
               const critical = Boolean(result.abnormal_flag?.startsWith('C'));
               return <Fragment key={result.id}><tr className={result.abnormal_flag ? `report-abnormal${critical ? ' report-critical' : ''}` : ''}>
                 <td><strong>{result.parameter_name}</strong>{result.method && <small className="report-method">Method: {result.method}</small>}</td>
-                <td><strong>{result.result_value || '-'}</strong></td>
+                <td><strong>{result.result_value || '-'}</strong>{result.abnormal_flag && <span className="report-flag report-flag-abnormal">{flag}</span>}</td>
                 <td>{result.unit || '-'}</td>
                 <td>{referenceText(result.reference_ranges, detailed)}{result.reference_note && <small className="report-reference-note">{result.reference_note}</small>}</td>
-                <td><span className={`report-flag ${result.abnormal_flag ? 'report-flag-abnormal' : ''}`}>{flag}</span></td>
-              </tr>{result.description && <tr className="report-description-row"><td colSpan={5}><div className="report-description">{result.description}</div></td></tr>}</Fragment>;
+              </tr>{result.description && <tr className="report-description-row"><td colSpan={4}><div className="report-description">{result.description}</div></td></tr>}</Fragment>;
             })}</tbody>
           </table>
           {test.description && <div className="report-description report-panel-description"><strong>Clinical notes</strong><p>{test.description}</p></div>}
@@ -159,8 +159,9 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
         <div className="signature"><div className="signature-space">{detailed.authorized_signature_label || (detailed.status === 'AUTHORIZED' ? 'Digitally authorised' : '')}</div><div className="stamp-space" aria-label="Laboratory stamp area">LAB<br />STAMP</div><strong>{detailed.authorized_by_name || 'Authorised Signatory'}</strong>{detailed.authorized_by_designation && <span>{detailed.authorized_by_designation}</span>}</div>
       </footer>
       {Boolean(detailed.clinical_notes?.length) && <section className="report-doctor-notes"><h3>Doctor clinical notes</h3><p className="muted">Independently authored clinical notes. Laboratory authorization applies to laboratory results; notes may be added later.</p><DoctorNotes notes={detailed.clinical_notes || []} /></section>}
-      <div className="report-footer-bar"><span>Computer-generated laboratory report</span><span>Accession: {detailed.accession_no}</span></div>
-      <p className="report-note"><strong>Disclaimer:</strong> This laboratory report supports professional clinical opinion and is not, by itself, a diagnosis. Results and reference intervals are method- and laboratory-specific and must be interpreted by a qualified clinician with the patient's history, examination and other findings.</p>
+      <p className="report-tracking">{detailed.accession_no} · Revision {amendmentNo}{designPreview ? ' · DESIGN PREVIEW — NOT A PATIENT REPORT' : ''}</p>
+      </div>
+      <LetterheadFooter template={template} />
     </article>
   </section>;
 }
