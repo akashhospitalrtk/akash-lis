@@ -13,7 +13,8 @@
     "prisma:validate": "prisma validate",
     "prisma:check": "tsx src/scripts/checkPrisma.ts",
     "migrate": "tsx src/scripts/migrate.ts",
-    "seed": "tsx src/scripts/seed.ts"
+    "seed": "tsx src/scripts/seed.ts",
+    "catalogue:india": "tsx src/scripts/importIndiaCatalogue.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

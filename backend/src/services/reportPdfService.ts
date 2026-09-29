@@ -23,11 +23,11 @@ export async function makeReportPdf(report: ReportData): Promise<Buffer> {
   doc.registerFont('Hindi', fontFile('NotoSansDevanagari.ttf'));
   const chunks: Buffer[] = [];
   const finished = new Promise<Buffer>((resolve, reject) => { doc.on('data', (chunk: Buffer) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject); });
-  function text(value: string, size = 10, color = '#172b4d') {
+  function text(value: string, size = 10, color = '#172b4d', width = 507) {
     const runs = value.split(/([\u0900-\u097f\u200c\u200d]+)/).filter(Boolean);
     runs.forEach((run, index) => {
       doc.font(/[\u0900-\u097f]/.test(run) ? 'Hindi' : 'Body').fontSize(size).fillColor(color)
-        .text(run, { width: 507, lineGap: 3, continued: index < runs.length - 1 });
+        .text(run, { width, lineGap: 3, continued: index < runs.length - 1 });
     });
   }
   function heading(value: string) {
@@ -38,11 +38,29 @@ export async function makeReportPdf(report: ReportData): Promise<Buffer> {
   if (config.hospital.address) text(config.hospital.address, 9);
   if (config.hospital.phone) text(`Phone: ${config.hospital.phone}`, 9);
   heading('Authorized laboratory report');
-  text(`Patient: ${report.patient_name}    UHID: ${report.uhid || '-'}`);
-  text(`Accession: ${report.accession_no}    Revision: ${report.amendment_count || 0}`);
-  text(`Age: ${report.age_value ?? report.age_years ?? '-'} ${report.age_value != null ? report.age_unit : 'years'}    Sex: ${report.gender || '-'}    Type: ${report.patient_type || '-'}`);
-  text(`Referring doctor: ${report.referring_doctor || '-'}`);
-  text(`Sample: ${date(report.sample_date)}    Authorized: ${date(report.authorized_at)}`, 9);
+  const age = report.age_value ?? report.age_years;
+  const ageText = age != null ? `${age} ${report.age_value != null ? report.age_unit || 'years' : 'years'}` : '-';
+  const patientRows = [
+    ['Patient name', report.patient_name, 'Patient ID / UHID', report.uhid || '-'],
+    ['Age / Gender', `${ageText} / ${report.gender || '-'}`, 'Registered', date(report.sample_date)],
+    // sample_date is registration time; no separate collection event is stored yet.
+    ['Accession / SID', report.accession_no, 'Sample collected', 'Not recorded'],
+    ['Referring doctor', report.referring_doctor || '-', 'Sample received', report.sample_received_at ? date(report.sample_received_at) : 'Not recorded'],
+    ['Patient type', report.patient_type || '-', 'Report date / time', report.authorized_at ? date(report.authorized_at) : 'Pending authorization'],
+  ];
+  function patientField(label: string, value: string, x: number, y: number) {
+    doc.x = x; doc.y = y; text(label, 9, '#172b4d', 87);
+    const labelBottom = doc.y;
+    doc.x = x + 89; doc.y = y; text(':', 9, '#172b4d', 5);
+    doc.x = x + 99; doc.y = y; text(value, 9, '#172b4d', 144);
+    return Math.max(labelBottom, doc.y);
+  }
+  for (const [leftLabel, leftValue, rightLabel, rightValue] of patientRows) {
+    const y = doc.y;
+    const leftBottom = patientField(leftLabel, leftValue, 44, y);
+    const rightBottom = patientField(rightLabel, rightValue, 308, y);
+    doc.x = 44; doc.y = Math.max(leftBottom, rightBottom) + 3;
+  }
   for (const test of report.tests) {
     heading(test.profile_name);
     for (const result of test.results) {

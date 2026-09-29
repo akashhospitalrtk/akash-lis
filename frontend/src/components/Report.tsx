@@ -18,6 +18,10 @@ function LocationIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-6.1 6-11a6 6 0 1 0-12 0c0 4.9 6 11 6 11Z" /><circle cx="12" cy="10" r="2" /></svg>;
 }
 
+function PatientDetail({ label, value, primary = false }: { label: string; value: string; primary?: boolean }) {
+  return <div className={`report-patient-row${primary ? ' report-patient-name' : ''}`}><dt>{label}</dt><span aria-hidden="true">:</span><dd>{value}</dd></div>;
+}
+
 export function Report({ order, hospital, user, onUpdated, onBack }: { order: Order | null; hospital: Hospital; user: User; onUpdated: (order: Order) => void; onBack: () => void }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -107,14 +111,21 @@ export function Report({ order, hospital, user, onUpdated, onBack }: { order: Or
       </div>
 
       <section className="report-patient" aria-label="Patient and sample details">
-        <div className="report-patient-primary"><span>Patient name</span><strong>{detailed.patient_name}</strong></div>
-        <div><span>UHID / Registration no.</span><strong>{detailed.uhid || '-'}</strong></div>
-        <div><span>Age / Gender</span><strong>{[formatAge(detailed), detailed.gender].filter(Boolean).join(' / ') || '-'}</strong></div>
-        <div><span>Referring doctor</span><strong>{detailed.referring_doctor || '-'}</strong></div>
-        <div><span>Registered</span><strong>{formatDate(detailed.created_at, true)}</strong></div>
-        <div><span>Sample collected</span><strong>{formatDate(detailed.sample_date, true)}</strong></div>
-        <div><span>Sample received</span><strong>{detailed.sample_received_at ? formatDate(detailed.sample_received_at, true) : 'Not recorded'}</strong></div>
-        <div><span>Report date / time</span><strong>{detailed.authorized_at ? formatDate(detailed.authorized_at, true) : 'Pending authorization'}</strong></div>
+        <dl className="report-patient-column">
+          <PatientDetail label="Patient name" value={detailed.patient_name} primary />
+          <PatientDetail label="Age / Gender" value={[formatAge(detailed), detailed.gender].filter(Boolean).join(' / ') || '-'} />
+          <PatientDetail label="Accession / SID" value={detailed.accession_no} />
+          <PatientDetail label="Referring doctor" value={detailed.referring_doctor || '-'} />
+          <PatientDetail label="Patient type" value={detailed.patient_type || '-'} />
+        </dl>
+        <dl className="report-patient-column">
+          <PatientDetail label="Patient ID / UHID" value={detailed.uhid || '-'} />
+          <PatientDetail label="Registered" value={formatDate(detailed.sample_date, true)} />
+          {/* sample_date is the registration form's date, not a collection event. */}
+          <PatientDetail label="Sample collected" value="Not recorded" />
+          <PatientDetail label="Sample received" value={detailed.sample_received_at ? formatDate(detailed.sample_received_at, true) : 'Not recorded'} />
+          <PatientDetail label="Report date / time" value={detailed.authorized_at ? formatDate(detailed.authorized_at, true) : 'Pending authorization'} />
+        </dl>
       </section>
 
       {detailed.tests.map((test) => {

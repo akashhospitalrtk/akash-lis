@@ -175,13 +175,19 @@ tbody tr:hover td { background: #f3fbfc; }
 .report-issued, .report-preview { padding: .26rem .5rem; border-radius: 999px; font-size: .65rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
 .report-issued { background: #d9f0e7; color: #116247; }
 .report-preview { background: #fff1d6; color: #865400; }
-.report-patient { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: .85rem 0 0; padding: 0; border: 1px solid #cfdee2; border-bottom: 0; }
-.report-patient > div { display: grid; gap: .16rem; min-height: 51px; padding: .5rem .6rem; border-right: 1px solid #cfdee2; border-bottom: 1px solid #cfdee2; }
-.report-patient > div:nth-child(4n) { border-right: 0; }
-.report-patient-primary { grid-column: span 2; background: #f8fbfc; }
-.report-patient span { color: #60777f; font-size: .62rem; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
-.report-patient strong { color: #172f38; font-size: .78rem; line-height: 1.2; }
-.report-patient-primary strong { color: #075f7c; font-size: .92rem; }
+.report-patient { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; margin: .85rem 0 0; padding: 0 .6rem .8rem; border: 0; border-bottom: 1px solid #cfdee2; break-inside: avoid; }
+.report-patient-column { min-width: 0; margin: 0; }
+.report-patient-row { display: grid; grid-template-columns: 8.6rem .4rem minmax(0, 1fr); align-items: baseline; gap: .35rem; margin-bottom: .4rem; color: #17242a; font-size: .78rem; line-height: 1.5; }
+.report-patient-row dt, .report-patient-row dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.report-patient-row > span { color: inherit; font-size: inherit; }
+.report-patient-name dd { font-weight: 800; }
+@media screen and (max-width: 850px) {
+  .report-patient { grid-template-columns: 1fr; gap: .4rem; }
+}
+@media print {
+  .report-patient { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5mm; }
+  .report-patient-row { grid-template-columns: 29mm 1.5mm minmax(0, 1fr); gap: 1mm; font-size: 9pt; }
+}
 .report-test { margin-top: .95rem; break-inside: avoid; }
 .report-test h3 { margin: 0; padding: .42rem .6rem; border: 1px solid #b9d9e1; border-bottom: 0; background: #e7f5f8; color: #07566e; font-size: .79rem; font-weight: 900; letter-spacing: .035em; text-transform: uppercase; }
 .report-test table { width: 100%; border: 1px solid #cbdde2; border-collapse: collapse; font-size: .73rem; }
@@ -221,7 +227,7 @@ nav button { min-height: 34px; padding: .42rem .52rem; border-radius: 7px; font-
 @media (max-width: 700px) { .brand { border-right: 0; padding-right: 0; } }
 
 @media (max-width: 700px) {
-  .report-header { align-items: flex-start; flex-direction: column; }.report-contact { min-width: 0; }.report-contact p { justify-content: flex-start; text-align: left; }.report-patient { grid-template-columns: repeat(2, minmax(0, 1fr)); }.report-patient > div:nth-child(4n) { border-right: 1px solid #cfdee2; }.report-patient > div:nth-child(2n) { border-right: 0; }.report-footer-bar { align-items: flex-start; flex-direction: column; gap: .25rem; }
+  .report-header { align-items: flex-start; flex-direction: column; }.report-contact { min-width: 0; }.report-contact p { justify-content: flex-start; text-align: left; }.report-footer-bar { align-items: flex-start; flex-direction: column; gap: .25rem; }
 }
 
 @media print {
