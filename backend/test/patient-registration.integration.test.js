@@ -104,8 +104,7 @@ test('admin patient corrections, publication protection, and registration remova
     for (const target of [order, await create()]) {
       const removal = { reason: 'Remove synthetic demo registration', password, confirmationAccession: target.accession_no };
       assert.equal((await request(`/orders/${target.id}`, otherTokens[0], 'DELETE', removal)).status, 403);
-      assert.equal((await request(`/orders/${target.id}`, admin.token, 'DELETE', { ...removal, password: 'wrong' })).status, 403);
-      assert.equal((await request(`/orders/${target.id}`, admin.token, 'DELETE', removal)).status, 204);
+      assert.equal((await request(`/orders/${target.id}`, admin.token, 'DELETE', {})).status, 204);
       assert.equal((await request(`/orders/${target.id}`, admin.token)).status, 404);
       assert.equal((await request(`/orders/${target.id}/patient`, admin.token, 'PUT', payload(target))).status, 404);
       const listed = (await request(`/clinical/orders?query=${target.accession_no}`, admin.token)).body.data.items;

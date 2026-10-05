@@ -12,6 +12,38 @@ const report = {
   authorized_at: '2026-09-12T10:00:00Z', amendment_count: 0, tests: [], clinical_notes: [],
 };
 
+test('header alignment and font sizes affect the actual PDF', async () => {
+  async function brand(alignment) {
+    const bytes = await makeReportPdf(report, { ...defaultReportTemplate, brandName: 'CUSTOM LAB', brandFontPt: 40, headerAlignment: alignment });
+    const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
+    try {
+      const pdf = await task.promise;
+      return (await (await pdf.getPage(1)).getTextContent()).items.find(item => item.str === 'CUSTOM LAB');
+    } finally { await task.destroy(); }
+  }
+  const left = await brand('left'), center = await brand('center'), right = await brand('right');
+  assert.equal(left.height, 40);
+  assert.ok(left.transform[4] < center.transform[4] && center.transform[4] < right.transform[4]);
+});
+
+test('split letterhead keeps branding left and contact details right with independent alignment', async () => {
+  const bytes = await makeReportPdf(report, { ...defaultReportTemplate, brandName: 'CUSTOM LAB', brandFontPt: 40, headerGapMm: 12, footerGapMm: 12 });
+  const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
+  try {
+    const pdf = await task.promise;
+    const { items } = await (await pdf.getPage(1)).getTextContent();
+    const brand = items.find(item => item.str === 'CUSTOM LAB');
+    assert.equal(brand.transform[4], 80);
+    const phone = items.find(item => item.str === defaultReportTemplate.phone && item.transform[5] > 700);
+    assert.ok(Math.abs(phone.transform[4] + phone.width - (595.28 - 14)) < 1);
+    assert.ok(phone.transform[4] > 343 + 12 * 72 / 25.4);
+    const location = items.find(item => item.str === defaultReportTemplate.locationLine);
+    assert.ok(Math.abs(location.transform[4] + location.width - (595.28 - 14)) < 1);
+    const footerPhone = items.find(item => item.str === defaultReportTemplate.phone && item.transform[5] < 120);
+    assert.ok(Math.abs(footerPhone.transform[4] + footerPhone.width - 522) < 1);
+  } finally { await task.destroy(); }
+});
+
 test('PDF patient header uses aligned labels and values in two columns', async () => {
   const bytes = await makeReportPdf(report, { ...defaultReportTemplate, patientLayout: 'bordered' });
   await mkdir(new URL('../test-results/', import.meta.url), { recursive: true });
@@ -50,6 +82,7 @@ test('letterhead repeats on every page and long results and notes stay inside re
     const pdf = await task.promise;
     assert.ok(pdf.numPages > 2 && pdf.numPages < 20);
     let all = '';
+    let fixedPositions;
     for (let p = 1; p <= pdf.numPages; p++) {
       const { items } = await (await pdf.getPage(p)).getTextContent();
       const text = items.map(i => i.str).join(' '); all += text;
@@ -57,14 +90,56 @@ test('letterhead repeats on every page and long results and notes stay inside re
       assert.ok(text.includes('Inside Akash Hospital'), `page ${p} location`);
       assert.ok(text.includes('Helpline No.'), `page ${p} footer`);
       assert.ok(text.includes(`Page ${p} of ${pdf.numPages}`));
+      const signature = items.find(item => item.str === 'Authorized signatory');
+      assert.ok(signature, `page ${p}: signatory repeated`);
+      assert.ok(Math.abs(signature.transform[4] + signature.width - (595.28 - 44)) < 1, 'signature right aligned');
+      assert.ok(items.some(item => item.str === 'Digitally authorised'));
+      const positions = ['AKASH', 'Inside Akash Hospital', 'Helpline No.', 'Authorized signatory'].map(label => {
+        const item = items.find(item => item.str === label);
+        assert.ok(item, label);
+        return item.transform.slice(4, 6);
+      });
+      if (!fixedPositions) fixedPositions = positions;
+      assert.deepEqual(positions, fixedPositions, `page ${p}: letterhead stays fixed`);
       for (const item of items.filter(i => /Measurement-\d+/.test(i.str) || i.str.includes('Clinical note text.') || i.str.includes('Long explanatory text.'))) {
         const y = 841.89 - item.transform[5];
-        assert.ok(y > 38 * 72 / 25.4 && y < 841.89 - 34 * 72 / 25.4 - 10, `page ${p}: content y=${y}`);
+        assert.ok(y > 38 * 72 / 25.4 && y < 841.89 - 34 * 72 / 25.4 - 90, `page ${p}: content stays above signature y=${y}`);
       }
     }
     assert.ok(all.includes('Measurement-64'));
     assert.ok(all.includes('END-DESCRIPTION'));
     assert.ok(all.includes('FINAL-NOTE-TEXT'));
+  } finally { await task.destroy(); }
+});
+
+test('amendment history stays off the patient PDF and multiple panels retain result columns', async () => {
+  const bytes = await makeReportPdf({ ...report, amendment_count: 2,
+    amendment_reason: 'INTERNAL-ONLY-AMENDMENT-REASON',
+    tests: Array.from({ length: 12 }, (_, panel) => ({ profile_name: `Panel ${panel}`,
+      results: Array.from({ length: 8 }, (_, row) => ({ parameter_name: `Analyte ${panel}-${row}`,
+        result_value: '12.5', unit: 'U/L', reference_ranges: [], method: 'Synthetic method' }))
+    })) });
+  const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
+  try {
+    const pdf = await task.promise;
+    assert.ok(pdf.numPages > 1);
+    let all = '';
+    for (let page = 1; page <= pdf.numPages; page++) {
+      const { items } = await (await pdf.getPage(page)).getTextContent();
+      const words = items.map(item => item.str).join(' ');
+      all += words;
+      for (const label of ['AKASH', 'Helpline No.', 'Test name', 'Result', 'Unit', 'Reference range']) {
+        assert.ok(words.includes(label), `page ${page}: ${label}`);
+      }
+      for (const item of items.filter(item => item.str.startsWith('Analyte '))) {
+        const y = 841.89 - item.transform[5];
+        assert.ok(y > 38 * 72 / 25.4 && y < 841.89 - 34 * 72 / 25.4 - 10);
+      }
+    }
+    assert.doesNotMatch(all, /amend|revision|INTERNAL-ONLY/i);
+    for (let panel = 0; panel < 12; panel++) {
+      for (let row = 0; row < 8; row++) assert.ok(all.includes(`Analyte ${panel}-${row}`));
+    }
   } finally { await task.destroy(); }
 });
 
@@ -82,6 +157,48 @@ test('custom design changes PDF labels, header/footer copy and optional sample f
     assert.ok(text.includes('CUSTOM LAB') && text.includes('CUSTOM SUPPORT') && text.includes('TEST-PHONE'));
     assert.ok(text.includes('Patient full name'));
     assert.ok(!text.includes('Sample collected') && !text.includes('Sample received'));
+  } finally { await task.destroy(); }
+});
+
+test('whole investigations move to a fresh page and parameter explanations stay with their values', async () => {
+  const tests = Array.from({ length: 4 }, (_, panel) => ({ profile_name: `Whole panel ${panel}`,
+    results: Array.from({ length: 4 }, (_, row) => ({ parameter_name: `Complete-${panel}-${row}`, result_value: '12.5',
+      unit: 'U/L', reference_ranges: [], method: 'Synthetic', description: `Explanation-${panel}-${row} ` + 'Explanation text. '.repeat(5) + ` END-${panel}-${row}` }))
+  }));
+  const bytes = await makeReportPdf({ ...report, tests });
+  await writeFile(new URL('../test-results/report-kept-panels.pdf', import.meta.url), bytes);
+  const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
+  try {
+    const pdf = await task.promise;
+    const pages = [];
+    for (let page = 1; page <= pdf.numPages; page++) pages.push((await (await pdf.getPage(page)).getTextContent()).items.map(item => item.str).join(' '));
+    assert.ok(pdf.numPages > 1);
+    for (let panel = 0; panel < 4; panel++) {
+      const page = pages.find(content => content.includes(`Whole panel ${panel}`));
+      assert.ok(page);
+      for (let row = 0; row < 4; row++) {
+        assert.ok(page.includes(`Complete-${panel}-${row}`), 'whole investigation is on same page');
+        assert.ok(page.includes(`END-${panel}-${row}`), 'explanation stays with its parameter');
+      }
+    }
+  } finally { await task.destroy(); }
+});
+
+test('oversized investigations break only between complete ordinary parameters', async () => {
+  const bytes = await makeReportPdf({ ...report, tests: [{ profile_name: 'Large investigation',
+    results: Array.from({ length: 25 }, (_, i) => ({ parameter_name: `PARAMETER-${i}-START`, result_value: '1',
+      unit: 'U/L', reference_ranges: [], method: 'Method text. '.repeat(8), comments: 'Comment text. '.repeat(8),
+      description: 'Description text. '.repeat(12) + ` PARAMETER-${i}-END` })) }] });
+  const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
+  try {
+    const pdf = await task.promise;
+    const pages = [];
+    for (let page = 1; page <= pdf.numPages; page++) pages.push((await (await pdf.getPage(page)).getTextContent()).items.map(item => item.str).join(' '));
+    assert.ok(pages.length > 2);
+    for (let i = 0; i < 25; i++) {
+      const page = pages.find(content => content.includes(`PARAMETER-${i}-START`));
+      assert.ok(page?.includes(`PARAMETER-${i}-END`), `parameter ${i} stays complete`);
+    }
   } finally { await task.destroy(); }
 });
 

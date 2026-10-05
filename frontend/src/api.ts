@@ -30,7 +30,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return body as T;
 }
 
-export async function download(path: string, fallbackFilename: string) {
+export async function fetchDocument(path: string) {
   const token = getToken();
   const response = await fetch(`${baseUrl}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   handleExpiredSession(response);
@@ -38,14 +38,19 @@ export async function download(path: string, fallbackFilename: string) {
     const body = await response.json().catch(() => ({}));
     throw new ApiError(body.message || `Download failed (${response.status})`, response.status, body.code, body.details);
   }
-  const filename = response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/i)?.[1] || fallbackFilename;
-  const url = URL.createObjectURL(await response.blob());
-  const link = document.createElement('a');
+  return { blob: await response.blob(), filename: response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/i)?.[1], rowCount: Number(response.headers.get('X-Export-Row-Count') || 0) };
+}
+
+export async function download(path: string, fallbackFilename: string) {
+  const document = await fetchDocument(path);
+  const filename = document.filename || fallbackFilename;
+  const url = URL.createObjectURL(document.blob);
+  const link = window.document.createElement('a');
   link.href = url;
   link.download = filename;
-  document.body.appendChild(link);
+  window.document.body.appendChild(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return { filename, rowCount: Number(response.headers.get('X-Export-Row-Count') || 0) };
+  return { filename, rowCount: document.rowCount };
 }

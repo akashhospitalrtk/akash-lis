@@ -1,5 +1,12 @@
+x-bounded-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "5m"
+    max-file: "3"
+
 services:
   db:
+    logging: *bounded-logging
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -12,12 +19,14 @@ services:
     expose:
       - "5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      start_period: 60s
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
 
   backend:
+    logging: *bounded-logging
     image: akash-lis-backend:${LIS_VERSION:-1.1.0}
     restart: unless-stopped
     build:
@@ -48,11 +57,13 @@ services:
       - "4044"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4044/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      start_period: 60s
       interval: 10s
       timeout: 5s
       retries: 10
 
   frontend:
+    logging: *bounded-logging
     image: akash-lis-frontend:${LIS_VERSION:-1.1.0}
     restart: unless-stopped
     build:
@@ -101,11 +112,7 @@ services:
       timeout: 5s
       retries: 1
       start_period: 5m
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "3"
+    logging: *bounded-logging
 
 volumes:
   lis_postgres_data:

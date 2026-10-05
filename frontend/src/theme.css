@@ -69,6 +69,27 @@
   .page-heading > .muted { max-width: 360px; }
   .card, .auth-card { border-color: var(--lis-border); border-radius: 12px; box-shadow: none; }
   .card { padding: 1.2rem; }
+  .registration-layout { align-items: start; }
+  .registration-layout > .card { min-width: 0; }
+  .registration-layout .investigation-scroll { max-height: clamp(220px, 38vh, 360px); overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 0 .5rem .4rem 0; border-top: 1px solid var(--lis-border); }
+  .registration-layout .investigation-scroll:focus-visible, .registration-layout .selected-tests:focus-visible { outline: 3px solid #a99fec; outline-offset: 3px; }
+  .registration-layout .investigation-scroll fieldset { min-width: 0; }
+  .registration-layout .profile-option { min-width: 0; overflow-wrap: anywhere; }
+  .registration-layout .investigation-scroll-hint { margin: .4rem 0 .65rem; }
+  .registration-layout .selected-tests { max-height: 92px; overflow-y: auto; overscroll-behavior-y: contain; padding: .35rem; background: var(--lis-subtle); border-radius: 6px; }
+  .registration-layout .selected-tests button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+  .registration-layout .registration-submit-bar { position: sticky; bottom: .5rem; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding: .9rem 1rem; background: var(--lis-surface); border: 1px solid var(--lis-border); border-radius: 10px; box-shadow: 0 -4px 20px #1a1a2e12; }
+  .registration-submit-bar .form-error { flex-basis: 100%; margin: 0; }
+  .registration-selection-summary { display: grid; gap: .2rem; font-size: .85rem; }
+  .registration-selection-summary small { font-size: .72rem; }
+  .registration-submit-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
+  @media (max-width: 560px) {
+    .registration-layout .patient-typeahead { flex: none; width: 100%; }
+    .registration-layout .investigation-scroll { max-height: 280px; }
+    .registration-submit-buttons { width: 100%; }
+    .registration-submit-buttons button { flex: 1; padding: .65rem .5rem; }
+    .registration-selection-summary small { display: none; }
+  }
   .section-title { padding-bottom: .85rem; border-bottom: 1px solid var(--lis-border); }
   .section-title span { color: var(--lis-muted); font-family: var(--lis-mono); font-size: .6rem; }
   .field, .form-grid label, .filters label { color: #514e5c; font-weight: 500; }

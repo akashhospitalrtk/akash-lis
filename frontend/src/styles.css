@@ -82,6 +82,10 @@ nav button:hover:not(:disabled), nav button.nav-active { background: #e5f1ed; co
 .lookup-spinner { position: absolute; top: 50%; right: .72rem; width: 17px; height: 17px; transform: translateY(-50%); border: 2px solid #b9d5ca; border-top-color: #176b5b; border-radius: 50%; animation: lookup-spin .65s linear infinite; pointer-events: none; }
 .patient-typeahead:has(.lookup-spinner) .search-icon-button { visibility: hidden; }
 .patient-suggestions { max-width: 760px; }
+.hospital-master-button { display: none; }
+.match-list::before { color: #587069; font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.patient-suggestions::before { content: "LIS database"; }
+.match-list:not(.patient-suggestions)::before { content: "Hospital database"; }
 @keyframes lookup-spin { to { transform: translateY(-50%) rotate(360deg); } }
 @media (max-width: 560px) { .batch-actions { align-items: stretch; flex-direction: column; } }
 .export-page { width: min(820px, calc(100% - 2rem)); }

@@ -48,7 +48,7 @@ test('multiple roles, direct entry and protected record removal', async (t) => {
     }
     assert.ok(both.user.permissions.includes('result.enter'));
     assert.ok(both.user.permissions.includes('result.authorize'));
-    assert.ok(!both.user.permissions.includes('report.delete'));
+    assert.ok(both.user.permissions.includes('report.delete'));
     assert.deepEqual(catalogueManager.user.permissions.sort(), ['catalogue.delete', 'catalogue.manage']);
     assert.equal((await request('/clinical/orders', hybrid.token)).status, 200);
     assert.equal((await request('/users', hybrid.token)).status, 200);
@@ -94,22 +94,26 @@ test('multiple roles, direct entry and protected record removal', async (t) => {
     assert.equal((await request('/clinical/orders', hybrid.token)).status, 401);
   });
   const deletion = () => ({ reason: 'Synthetic duplicate record removal', password, confirmationAccession: order.accession_no });
-  await t.test('all non-admin roles denied; reason/password/accession required; direct service cannot bypass DB identity', async () => {
-    for (const user of [tech, auth, both, doctor, it]) assert.equal((await request(`/orders/${order.id}`, user.token, 'DELETE', deletion())).status, 403);
+  await t.test('only admin or authorizer may remove; authorizer requires approval and remarks; DB identity wins', async () => {
+    for (const user of [tech, doctor, it]) assert.equal((await request(`/orders/${order.id}`, user.token, 'DELETE', deletion())).status, 403);
     assert.equal((await request(`/orders/${order.id}`, null, 'DELETE', deletion())).status, 401);
-    assert.equal((await request(`/orders/${order.id}`, admin.token, 'DELETE', { reason: 'Remove record' })).status, 400);
-    assert.equal((await request(`/orders/${order.id}`, admin.token, 'DELETE', { ...deletion(), reason: 'x' })).status, 400);
-    assert.equal((await request(`/orders/${order.id}`, admin.token, 'DELETE', { ...deletion(), confirmationAccession: 'OTHER-REPORT' })).status, 409);
+    assert.equal((await request(`/orders/${order.id}`, auth.token, 'DELETE', { reason: 'Remove record' })).status, 400);
+    assert.equal((await request(`/orders/${order.id}`, auth.token, 'DELETE', { password })).status, 400);
     await assert.rejects(removeClinicalRecord(deletion(), order.id, { ...tech.user, role: 'ADMIN', roles: ['ADMIN'] }), (e) => e.statusCode === 403);
     assert.equal((await request(`/orders/${order.id}`, admin.token)).status, 200);
   });
   await t.test('password confirmation has persistent throttling and does not log passwords', async () => {
-    for (let i = 0; i < 5; i++) assert.equal((await request(`/orders/${order.id}`, admin.token, 'DELETE', { ...deletion(), password: 'Wrong-secret-not-in-audit' })).status, 403);
-    assert.equal((await request(`/orders/${order.id}`, admin.token, 'DELETE', deletion())).status, 429);
+    for (let i = 0; i < 5; i++) assert.equal((await request(`/orders/${order.id}`, auth.token, 'DELETE', { ...deletion(), password: 'Wrong-secret-not-in-audit' })).status, 403);
+    assert.equal((await request(`/orders/${order.id}`, auth.token, 'DELETE', deletion())).status, 429);
     const audit = await pool.query("SELECT details FROM system_audit_events WHERE event_type = 'RECORD_REMOVAL_DENIED'");
     assert.equal(audit.rows.length, 5); assert.doesNotMatch(JSON.stringify(audit.rows), /Wrong-secret|Synthetic-access-check/);
     // Simulate the expiry of the throttle window in this disposable database.
-    await pool.query("UPDATE users SET sensitive_attempt_window = NOW() - INTERVAL '16 minutes' WHERE id=$1", [admin.user.id]);
+    await pool.query("UPDATE users SET sensitive_attempt_window = NOW() - INTERVAL '16 minutes' WHERE id=$1", [auth.user.id]);
+    const target = (await request('/orders', admin.token, 'POST', orderInput)).body.data;
+    assert.equal((await request(`/orders/${target.id}`, auth.token, 'DELETE', deletion())).status, 204);
+    const approval = (await pool.query("SELECT details FROM system_audit_events WHERE event_type='CLINICAL_RECORD_REMOVED' AND details->>'orderId'=$1", [target.id])).rows[0].details;
+    assert.equal(approval.approvalMethod, 'ADMIN_PASSWORD');
+    assert.ok(approval.approvalAdminId);
   });
   await t.test('admin removal is atomic, hides patient snapshot everywhere, and retains results/history', async () => {
     const attempts = await Promise.all([request(`/orders/${order.id}`, admin.token, 'DELETE', deletion()), request(`/orders/${order.id}`, secondAdmin.token, 'DELETE', deletion())]);
