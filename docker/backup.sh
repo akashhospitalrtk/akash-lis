@@ -7,6 +7,22 @@ interval=${BACKUP_INTERVAL_SECONDS:-86400}
 case "$interval" in ''|*[!0-9]*) echo 'Invalid backup interval' >&2; exit 1;; esac
 [ "$interval" -ge 60 ] && [ "$interval" -le 604800 ] || exit 1
 
+retention_count=${BACKUP_RETENTION_COUNT:-30}
+case "$retention_count" in ''|*[!0-9]*) echo 'Invalid backup retention count' >&2; exit 1;; esac
+[ "$retention_count" -ge 2 ] && [ "$retention_count" -le 3650 ] || exit 1
+
+prune_backups() {
+  count=$(find /backups -maxdepth 1 -type f -name 'lis-*.dump' | wc -l | tr -d ' ')
+  [ "$count" -gt "$retention_count" ] || return 0
+  remove=$((count - retention_count))
+  find /backups -maxdepth 1 -type f -name 'lis-*.dump' -print | sort | head -n "$remove" |
+    while IFS= read -r old; do
+      [ -n "$old" ] || continue
+      rm -f -- "$old" "$old.sha256"
+    done
+  echo "Backup retention: kept newest $retention_count backup(s)."
+}
+
 health() {
   [ -r /backups/last-success ] || return 1
   read -r last file < /backups/last-success
@@ -34,6 +50,7 @@ backup_once() (
   printf '%s %s\n' "$now" "$file" > "last-success.$$.tmp"
   mv -- "last-success.$$.tmp" last-success
   rm -f -- last-failure
+  prune_backups
   echo "$stamp Backup saved: $file (archive listing checked; restoration must be tested separately)"
   # Aggregate size only; no names, identifiers or medical information in this CSV.
   if size=$(psql --no-password -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT pg_database_size(current_database())'); then
