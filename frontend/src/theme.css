@@ -155,8 +155,6 @@
   .test-entry-title { background: var(--lis-surface); color: var(--lis-ink); padding: 1rem; }
   .result-grid { border-color: #eeece6; }
   .result-grid-head { background: var(--lis-subtle); color: var(--lis-muted); font-family: var(--lis-mono); font-size: .58rem; }
-  .step-button { background: var(--lis-accent); }
-  .step-button:hover:not(:disabled) { background: var(--lis-accent-hover); }
   .test-remarks, .quick-entry-settings { background: var(--lis-subtle); border-color: var(--lis-border); }
   .test-remarks > span { color: var(--lis-muted); }
   .catalogue-page { --catalogue-border: var(--lis-border); --catalogue-subtle: var(--lis-subtle); --catalogue-ink: var(--lis-ink); --catalogue-accent: var(--lis-accent); }

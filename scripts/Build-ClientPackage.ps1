@@ -1,4 +1,4 @@
-param([ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.]+)?$')][string]$Version = '1.2.0-rc.3')
+param([ValidatePattern('^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.]+)?$')][string]$Version = '1.2.0-rc.4')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $destination = Join-Path $root "releases/lis-$Version"
@@ -34,6 +34,32 @@ try {
     foreach ($file in @('Start-LIS.ps1','Initialize-Client.ps1','Test-Storage.ps1','Test-Backup.ps1','Inspect-HMS.sql')) { Copy-Item -LiteralPath "scripts/$file" -Destination (Join-Path $destination 'scripts') }
     Copy-Item -LiteralPath docker/backup.sh -Destination (Join-Path $destination 'docker')
     foreach ($file in @('001_schema.sql','002_seed_profiles.sql')) { Copy-Item -LiteralPath "database/$file" -Destination (Join-Path $destination 'database') }
+    $releaseNotes = @"
+# Akash LIS $Version
+
+Release candidate packaged on $(Get-Date -Format 'yyyy-MM-dd').
+
+This runtime-only delivery contains versioned backend/frontend Docker images,
+PostgreSQL 16 Alpine, portable Docker Compose configuration, installation and
+startup scripts, backup/storage checks, starter database schema/catalogue,
+README, technical handbook, clinical/integration documentation and SHA-256 hashes.
+
+This refreshed candidate includes the consolidated README and technical handbook.
+No hospital database, patient records, staff accounts, backups or live credentials
+are exported. Initialize-Client.ps1 generates private credentials on the client.
+Saved hospital catalogue/report configuration requires a separate approved transfer.
+
+Install on Windows x64 with Docker Desktop using Linux containers. Verify every
+entry in SHA256SUMS.txt, load images.tar, run scripts/Initialize-Client.ps1,
+configure hospital details and backup storage, then run scripts/Start-LIS.ps1.
+See TECHNICAL.md for full installation, upgrade and recovery instructions.
+
+This is a release candidate. Package creation does not establish hospital
+acceptance, clinical approval, printer/LAN compatibility or integration readiness.
+Never remove the installed database volume. Back up and verify restoration before
+upgrading; keep previous images and assess schema compatibility before rollback.
+"@
+    [IO.File]::WriteAllText((Join-Path $destination 'RELEASE-NOTES.md'), $releaseNotes, (New-Object Text.UTF8Encoding $false))
     docker image save -o (Join-Path $destination 'images.tar') "akash-lis-backend:$Version" "akash-lis-frontend:$Version" postgres:16-alpine
     if ($LASTEXITCODE -ne 0) { throw 'Image export failed; package is incomplete.' }
     $manifest = Get-ChildItem -LiteralPath $destination -Recurse -File | ForEach-Object {

@@ -1,5 +1,5 @@
 import { OrderActions } from './OrderActions';
-import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { formatAge, formatDate, isDetailOrder, referenceText, resultFlag, userRoleLabel, type ResultTest, hasRole } from '../lib';
 import type { Order, Result, User } from '../types';
@@ -16,10 +16,6 @@ function decimalStep(result: Result) {
   if (configured !== null && configured > 0) return configured;
   const decimals = result.reference_ranges.flatMap((range) => [range.low, range.high]).map((value) => String(value ?? '').split('.')[1]?.length || 0);
   return 10 ** -Math.min(Math.max(...decimals, 0), 3);
-}
-
-function formatNumber(value: number) {
-  return String(Number(value.toFixed(6)));
 }
 
 function resultValidationMessage(result: Result, value: string | null | undefined) {
@@ -48,6 +44,7 @@ function CommonValuePicker({ result, locked, onChange, inputId }: { result: Resu
 }
 
 function NumericInput({ result, value, locked, onChange, autoFocus }: { result: Result; value: string; locked: boolean; onChange: (value: string) => void; autoFocus: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const inputId = `result-value-${result.id}`;
   const step = decimalStep(result);
   const sliderMin = finiteNumber(result.slider_min);
@@ -56,15 +53,24 @@ function NumericInput({ result, value, locked, onChange, autoFocus }: { result: 
   const numericValue = finiteNumber(value);
   const suggested = finiteNumber(result.suggested_value);
   const sliderValue = hasSlider ? Math.min(Math.max(numericValue ?? suggested ?? sliderMin, sliderMin), sliderMax) : 0;
-  function adjust(direction: -1 | 1) {
-    const base = numericValue ?? suggested ?? 0;
-    onChange(formatNumber(base + direction * step));
-  }
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input || locked) return;
+    const handleWheel = (event: WheelEvent) => {
+      if (document.activeElement !== input || !event.deltaY || event.ctrlKey || event.metaKey || event.altKey) return;
+      const current = finiteNumber(input.value);
+      if (current === null && input.value.trim()) return;
+      // A non-passive listener keeps the page still while adjusting the focused result.
+      event.preventDefault();
+      const next = (current ?? suggested ?? 0) + (event.deltaY < 0 ? step : -step);
+      onChange(String(Number(next.toFixed(6))));
+    };
+    input.addEventListener('wheel', handleWheel, { passive: false });
+    return () => input.removeEventListener('wheel', handleWheel);
+  }, [locked, onChange, step, suggested]);
   return <div className="numeric-result-control">
     <div className="numeric-input-line">
-      <button type="button" tabIndex={-1} className="step-button" disabled={locked} onClick={() => adjust(-1)} aria-label={`Decrease ${result.parameter_name} by ${step}`}>−</button>
-      <input id={inputId} data-result-input type="number" inputMode="decimal" step={step} value={value} disabled={locked} autoFocus={autoFocus} onChange={(event) => onChange(event.target.value)} placeholder={result.suggested_value ? `Suggested: ${result.suggested_value}` : 'Enter value'} />
-      <button type="button" tabIndex={-1} className="step-button" disabled={locked} onClick={() => adjust(1)} aria-label={`Increase ${result.parameter_name} by ${step}`}>+</button>
+      <input ref={inputRef} id={inputId} data-result-input type="text" inputMode="decimal" value={value} disabled={locked} autoFocus={autoFocus} title="Click this field, then scroll up to increase or down to decrease the value" onChange={(event) => onChange(event.target.value)} placeholder={result.suggested_value ? `Suggested: ${result.suggested_value}` : 'Enter value'} />
     </div>
     {hasSlider && <input className="result-slider" aria-label={`${result.parameter_name} quick slider`} tabIndex={-1} type="range" min={sliderMin} max={sliderMax} step={step} value={sliderValue} disabled={locked} onChange={(event) => onChange(event.target.value)} />}
     <CommonValuePicker result={result} locked={locked} onChange={onChange} inputId={inputId} />
@@ -206,7 +212,7 @@ export function ResultEntry({ order, user, onUpdated, onReport, onDeleted }: { o
     <Header order={detailed} />
     <OrderActions key={detailed.id} order={detailed} user={user} onUpdated={onUpdated} onDeleted={onDeleted} hasUnsaved={detailed.tests.some((test) => test.results.some((r) => (values[r.id] ?? r.result_value ?? '') !== (r.result_value || '') || (comments[r.id] ?? r.comments ?? '') !== (r.comments || '')))} />
     {detailed.tests.length > 1 && <label className="investigation-jump"><span>Go to investigation</span><select value={jumpTestId} onChange={(event) => jumpToInvestigation(event.target.value)}><option value="">Choose a test panel…</option>{detailed.tests.map((test) => <option key={test.id} value={test.id}>{test.profile_code} — {test.profile_name} ({test.status.toLowerCase()})</option>)}</select></label>}
-    <div className="entry-toolbar"><div><strong>Rapid entry</strong><span>Type a value, press ↓ or Enter for the next field, ↑ for the previous field, and use +/− to adjust numeric results · Ctrl+S saves</span></div><div className="toolbar-actions">{canEdit && ['REGISTERED', 'COLLECTED'].includes(detailed.sample_status || '') && <button className="secondary" onClick={() => void startProcessing()} disabled={busy}>{detailed.sample_status === 'REGISTERED' ? 'Accept sample & enter values' : 'Start processing'}</button>}{!editingLocked && <label className="file-button">Import analyzer CSV<input type="file" accept=".csv,.txt" onChange={importCsv} /></label>}<button className="secondary" onClick={onReport}>Report preview</button>{!editingLocked && <button onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save results'}</button>}{canAuthorize && detailed.status === 'COMPLETED' && <button className="authorize" onClick={() => void authorize()} disabled={busy}>Authorize report</button>}{canAuthorize && locked && <button className="secondary" onClick={() => setShowAmendment((visible) => !visible)} disabled={busy}>Amend report</button>}</div></div>
+    <div className="entry-toolbar"><div><strong>Rapid entry</strong><span>Type a value, press ↓ or Enter for the next field, ↑ for the previous field · Ctrl+S saves</span></div><div className="toolbar-actions">{canEdit && ['REGISTERED', 'COLLECTED'].includes(detailed.sample_status || '') && <button className="secondary" onClick={() => void startProcessing()} disabled={busy}>{detailed.sample_status === 'REGISTERED' ? 'Accept sample & enter values' : 'Start processing'}</button>}{!editingLocked && <label className="file-button">Import analyzer CSV<input type="file" accept=".csv,.txt" onChange={importCsv} /></label>}<button className="secondary" onClick={onReport}>Report preview</button>{!editingLocked && <button onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save results'}</button>}{canAuthorize && detailed.status === 'COMPLETED' && <button className="authorize" onClick={() => void authorize()} disabled={busy}>Authorize report</button>}{canAuthorize && locked && <button className="secondary" onClick={() => setShowAmendment((visible) => !visible)} disabled={busy}>Amend report</button>}</div></div>
     {message && <p className="success-message">{message}</p>}{error && <p className="form-error">{error}</p>}
     {sampleNotAccepted && <p className="notice">Choose Accept sample & enter values above to record sample acceptance and unlock result entry.</p>}
     {sampleNeedsProcessing && <p className="notice workflow-notice"><strong>Next step:</strong> confirm that testing has started, then choose <strong>Start processing</strong> to unlock manual entry and analyzer import.</p>}
