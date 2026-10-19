@@ -1,25 +1,26 @@
 /* Shared screen/print letterhead. Values are supplied by the saved Report design. */
 .report-page { width: min(210mm, calc(100% - 2rem)); }
 .report-sheet { position: relative; isolation: isolate; padding: 0; min-height: 297mm; background: white; color: #252531; border: 1px solid #d2d2dc; font-family: Arial, sans-serif; }
-.letterhead-header { display: flex; align-items: center; gap: 12px; padding: 10px 18px; height: var(--letterhead-top); min-height: var(--letterhead-top); background: var(--letterhead-band); color: var(--letterhead-ink); }
-.letterhead-emblem { width: 82px; height: 110px; object-fit: contain; flex-shrink: 0; }
-.letterhead-brand { width: 366px; flex-shrink: 0; height: 100%; display: grid; grid-template-rows: 72% 28%; text-align: var(--header-align); }
-.letterhead-name { font-weight: 400; line-height: 1; letter-spacing: 1px; overflow-wrap: anywhere; }
+.letterhead-header { display: flex; align-items: center; gap: 12px; padding: 7mm 11.6mm 5mm; height: var(--letterhead-top); min-height: var(--letterhead-top); background: var(--letterhead-band); color: var(--letterhead-ink); border-bottom: 2px solid #214e70; }
+.letterhead-emblem { width: 40px; height: 52px; object-fit: contain; flex-shrink: 0; }
+.letterhead-brand { width: 330px; flex-shrink: 1; min-width: 0; height: 100%; display: grid; grid-template-rows: 66% 34%; text-align: var(--header-align); }
+.letterhead-name { font-weight: 700; line-height: 1; letter-spacing: 1px; overflow-wrap: anywhere; }
 .letterhead-subtitle { font-size: 32px; line-height: 1.1; overflow-wrap: anywhere; }
-.letterhead-contact { flex: 1; min-width: 0; margin-left: var(--header-gap); height: 100%; display: grid; grid-template-rows: 25% 48% 27%; font-size: 14px; line-height: 1.3; text-align: var(--header-contact-align); }
+.letterhead-contact { flex: 1; min-width: 0; margin-left: var(--header-gap); height: 100%; display: grid; grid-template-rows: 24% 52% 24%; font-size: 14px; line-height: 1.3; text-align: var(--header-contact-align); }
 .letterhead-contact p { margin: 0; overflow-wrap: anywhere; }
 .letterhead-contact .letterhead-phone { font-size: 18px; margin-bottom: 9px; }
 .letterhead-address { white-space: pre-line; }
-.letterhead-contact .letterhead-location { font-size: 19px; margin-top: 8px; }
+.letterhead-contact .letterhead-location { font-size: 12px; margin-top: 0; }
 .letterhead-watermark { position: absolute; z-index: -1; top: 61mm; left: 50%; transform: translateX(-50%); width: 145mm; height: 174mm; opacity: var(--watermark-opacity); pointer-events: none; }
 .report-body { position: relative; flex: 1; display: flex; flex-direction: column; padding: 5mm 11.6mm 4mm; min-width: 0; }
 .report-document-bar { margin: 0 0 3mm; padding: 0 0 2mm; border: 0; border-bottom: 1px solid #dbdbe4; background: transparent; }
-.report-document-bar p { color: #515163; font-size: 8pt; letter-spacing: .06em; }
+.report-document-bar p { color: #214e70; font-size: 10pt; font-weight: 700; letter-spacing: .08em; }
 .report-document-bar strong { color: #353544; font-size: 8pt; }
-.report-issued, .report-preview { font-size: 7pt; padding: 2px 6px; }
+.report-issued, .report-preview { font-size: 7pt; padding: 3px 7px; border-radius: 3px; }
+.report-issued { background: #edf3f7; color: #214e70; }
 .report-patient { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5mm; margin: 0; padding: 3mm 0; border-bottom: 1px solid #aeb0c3; }
 .patient-layout-bordered .report-patient { border: 1px solid #989ba8; padding: 3mm; }
-.report-patient-row { grid-template-columns: 25mm 1mm minmax(0, 1fr); gap: 1mm; font-size: var(--report-font); line-height: 1.4; margin: 0 0 1mm; }
+.report-patient-row { grid-template-columns: 31mm 1mm minmax(0, 1fr); gap: 1mm; font-size: var(--report-font); line-height: 1.4; margin: 0 0 1mm; }
 .report-patient-row dt { font-weight: 700; color: #353542; }
 .report-patient-row dd { font-weight: 400; }
 .patient-label-bold .report-patient-row dt { font-weight: 700; color: #252536; }
@@ -41,10 +42,10 @@
 .report-patient-three .report-patient-column:first-child .report-patient-name dd { font-size: calc(var(--report-font) + 2pt); }
 .letterhead-contact-icon { display: inline-block; width: 1em; height: 1em; margin-right: .35em; vertical-align: -.1em; }
 .report-test { break-inside: avoid; margin-top: 4mm; }
-.report-test h3 { text-align: center; background: transparent; color: #24242d; font-size: calc(var(--report-font) + 1.5pt); text-transform: none; border: 0; border-bottom: 1px solid #b8b9c6; padding: 2mm 0; break-after: avoid; }
+.report-test h3 { text-align: left; background: transparent; color: #214e70; font-size: calc(var(--report-font) + 1.5pt); font-weight: 700; text-transform: none; border: 0; border-bottom: 1px solid #c7d5df; padding: 2mm 0; break-after: avoid; }
 .report-test table { font-size: var(--report-font); border: 0; table-layout: fixed; }
 .report-test th, .report-test td { padding: 2.4mm 1.5mm; border: 0; border-bottom: 1px solid #d9dde5; }
-.report-test th { background: #eef0f5; border-top: 1px solid #9298a6; border-bottom: 1px solid #9298a6; color: #303038; font-weight: 700; text-transform: none; font-size: var(--report-font); letter-spacing: 0; }
+.report-test th { background: #edf3f7; border-top: 1px solid #c7d5df; border-bottom: 1px solid #c7d5df; color: #214e70; font-weight: 700; text-transform: none; font-size: calc(var(--report-font) - .5pt); letter-spacing: 0; }
 .report-test th:nth-child(1) { width: 48%; }.report-test th:nth-child(2) { width: 16%; }.report-test th:nth-child(3) { width: 13%; }.report-test th:nth-child(4) { width: 23%; }
 .report-test th:nth-child(2), .report-test td:nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; }
 .report-test th:nth-child(3), .report-test td:nth-child(3) { text-align: center; }
@@ -65,12 +66,12 @@
 .report-footer .signature { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
 .report-tracking { font-size: 7pt; color: #686878; margin: 3mm 0 0; border-top: 1px solid #dbdbe4; padding-top: 2mm; }
 .letterhead-footer { margin-top: auto; height: var(--letterhead-bottom); min-height: var(--letterhead-bottom); display: flex; flex-direction: column; }
-.letterhead-services { display: flex; align-items: flex-end; gap: 8px; padding: 5px 12px 7px; height: 55%; min-height: 0; }
+.letterhead-services { display: flex; align-items: flex-end; gap: 8px; padding: 5px 11.6mm 7px; height: 55%; min-height: 0; border-top: 1px solid #c7d5df; }
 .letterhead-copy { flex: 1; min-width: 0; height: 100%; display: grid; grid-template-rows: 28% 42% 30%; color: var(--footer-copy); font-size: 7.4pt; line-height: 1.3; font-weight: 700; text-align: var(--footer-align); }
 .letterhead-copy p { margin: 0 0 2px; overflow-wrap: anywhere; }
 .letterhead-helpline { color: var(--letterhead-helpline); font-size: 12pt; line-height: 1.2; width: 115px; flex-shrink: 0; margin-left: var(--footer-gap); height: 70%; overflow-wrap: anywhere; text-align: var(--footer-contact-align); }
 .letterhead-badge { width: 65px; height: 65px; flex: 0 0 auto; }
-.letterhead-terms { background: var(--footer-band); color: var(--footer-ink); padding: 5px 12px 8px; font-size: 6.6pt; line-height: 1.35; height: 45%; text-align: var(--footer-align); }
+.letterhead-terms { background: var(--footer-band); color: var(--footer-ink); padding: 5px 11.6mm 8px; font-size: 6.6pt; line-height: 1.35; height: 45%; text-align: var(--footer-align); }
 .letterhead-fit { overflow: hidden; min-width: 0; min-height: 0; height: 100%; }
 .letterhead-fit > div { white-space: pre-line; overflow-wrap: anywhere; }
 .letterhead-terms p { margin: 0 0 2px; overflow-wrap: anywhere; }
@@ -109,7 +110,7 @@
   .report-patient { break-inside: avoid; }
   .report-test { break-inside: avoid; }
   .report-test h3, .report-document-bar { background: transparent !important; }
-  .report-test th { background: #eef0f5 !important; }
+  .report-test th { background: #edf3f7 !important; }
   .report-footer, .report-tracking { break-inside: avoid; }
   .report-design-form, .report-design-toolbar, .report-design-page > .page-heading { display: none !important; }
   .report-design-layout, .report-design-canvas { position: static; max-height: none; display: block; overflow: visible; padding: 0; }

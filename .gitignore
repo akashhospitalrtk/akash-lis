@@ -1,4 +1,5 @@
 node_modules/
+.test-tools/
 dist/
 backend/generated/
 .env

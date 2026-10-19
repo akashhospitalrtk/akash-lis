@@ -5,7 +5,7 @@ import * as service from '../services/orderWorkflowService.js';
 import { updatePatientRegistration } from '../services/patientRegistrationService.js';
 import type { UpdatePatientInput } from '../schemas/orderSchemas.js';
 import type { DeleteReportInput } from '../schemas/orderSchemas.js';
-import type { SearchInput } from '../schemas/commonSchemas.js';
+import type { PatientHistorySearchInput } from '../schemas/patientSchemas.js';
 import type { CreateOrderInput, SaveResultsInput, AmendmentInput, OrderIdsInput, RecordsExportInput, CsvImportInput, ChangeTestsInput, WorklistInput } from '../schemas/orderSchemas.js';
 
 export const exportRecords = asyncHandler<RecordsExportInput>(async (req, res) => {
@@ -16,7 +16,7 @@ export const listWorklist = asyncHandler<WorklistInput>(async (req, res) => {
   ApiResponse.ok(await service.listWorklist(res.locals.input)).send(res);
 });
 
-export const patientHistory = asyncHandler<SearchInput>(async (req, res) => {
+export const patientHistory = asyncHandler<PatientHistorySearchInput>(async (req, res) => {
   ApiResponse.ok(await service.patientHistory(res.locals.input)).send(res);
 });
 

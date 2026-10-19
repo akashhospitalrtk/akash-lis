@@ -1,4 +1,5 @@
 import { OrderActions } from './OrderActions';
+import { OutsideLab } from './OutsideLab';
 import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { formatAge, formatDate, isDetailOrder, referenceText, resultFlag, userRoleLabel, type ResultTest, hasRole } from '../lib';
@@ -210,6 +211,7 @@ export function ResultEntry({ order, user, onUpdated, onReport, onDeleted }: { o
   const editingLocked = locked || !canEdit || sampleNotAccepted || sampleNeedsProcessing;
   return <section className="page result-page">
     <Header order={detailed} />
+    <OutsideLab key={detailed.id} orderId={detailed.id} user={user} />
     <OrderActions key={detailed.id} order={detailed} user={user} onUpdated={onUpdated} onDeleted={onDeleted} hasUnsaved={detailed.tests.some((test) => test.results.some((r) => (values[r.id] ?? r.result_value ?? '') !== (r.result_value || '') || (comments[r.id] ?? r.comments ?? '') !== (r.comments || '')))} />
     {detailed.tests.length > 1 && <label className="investigation-jump"><span>Go to investigation</span><select value={jumpTestId} onChange={(event) => jumpToInvestigation(event.target.value)}><option value="">Choose a test panel…</option>{detailed.tests.map((test) => <option key={test.id} value={test.id}>{test.profile_code} — {test.profile_name} ({test.status.toLowerCase()})</option>)}</select></label>}
     <div className="entry-toolbar"><div><strong>Rapid entry</strong><span>Type a value, press ↓ or Enter for the next field, ↑ for the previous field · Ctrl+S saves</span></div><div className="toolbar-actions">{canEdit && ['REGISTERED', 'COLLECTED'].includes(detailed.sample_status || '') && <button className="secondary" onClick={() => void startProcessing()} disabled={busy}>{detailed.sample_status === 'REGISTERED' ? 'Accept sample & enter values' : 'Start processing'}</button>}{!editingLocked && <label className="file-button">Import analyzer CSV<input type="file" accept=".csv,.txt" onChange={importCsv} /></label>}<button className="secondary" onClick={onReport}>Report preview</button>{!editingLocked && <button onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save results'}</button>}{canAuthorize && detailed.status === 'COMPLETED' && <button className="authorize" onClick={() => void authorize()} disabled={busy}>Authorize report</button>}{canAuthorize && locked && <button className="secondary" onClick={() => setShowAmendment((visible) => !visible)} disabled={busy}>Amend report</button>}</div></div>

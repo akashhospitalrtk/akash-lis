@@ -269,7 +269,11 @@ checksums and backup coverage.
 
 ## Development, tests and final acceptance
 
-Docker uses root .env; standalone uses backend/frontend examples. Frontend API
+Docker, standalone backend, Prisma and frontend use the root `.env`. Copy the
+root `.env.example` for a new setup; no backend/frontend env files are needed.
+Standalone database URLs default to localhost using the root POSTGRES_* values;
+set DATABASE_URL for a different database. Local Vite proxies `/api` to PORT
+(4000 by default). Docker uses its internal database host. Frontend API
 URL is build-time; `/api` is correct behind Nginx. Never commit secrets. Backend
 4044 and PostgreSQL 5432 stay private inside Compose.
 
@@ -317,3 +321,64 @@ startup failure was not reproduced; the exact failed URL/error is still needed.
 The running local HMS provider was `api` with SQL connection settings absent.
 SQL Server mapping/network credentials must be completed locally before lookup.
 No real patients or live credentials are in the release package.
+
+Outside laboratory reports
+--------------------------
+Open an order from the worklist and use the Outside laboratory panel. Save the laboratory name, external reference, dispatch date and sent-test notes, then upload the original PDF/JPG/PNG (up to 10 MB). Reports are stored in PostgreSQL and included in the existing pg_dump backups. Administrators and technicians can save/upload; authorizers can review/download. Original uploads do not change result or sample status. For a letterhead report, manually enter the supplied values and remarks in the usual result fields, save, authorize and print. The sample portal link opens separately; there is no automated portal import.
+
+When HMS SQL Server is on the Docker host, use HMS_SQL_SERVER=host.docker.internal. HMS_SQL_REQUEST_TIMEOUT_MS defaults to 30000 for slower lookup views; connection timeout remains 5000. On standalone installations use the actual local SQL host instead.
+
+Patient suggestions start after one character and a 300 ms pause in typing. The
+registration form requests five prefix matches from each source, merges duplicate
+UHIDs, and displays at most five suggestions in total. Exact matches come first.
+Arrow keys and Enter select a suggestion; Escape dismisses the list. LIS records
+appear as soon as they arrive, even if HMS is slow or unavailable. Changing the
+query or choosing a record cancels the browser request and prevents stale results
+from replacing the current list. Browser cancellation does not guarantee a SQL
+query stops; backend database timeouts remain necessary.
+
+Run `powershell -ExecutionPolicy Bypass -File .\scripts\Test-HMS.ps1` while a
+failure is happening. It tests TCP from the backend container, then SQL login,
+mapped columns and read permission without returning patients. A running
+Tailscale service or successful LIS `/api/health` does not establish HMS health.
+`host.docker.internal` points to the Docker host; if the actual HMS is elsewhere,
+verify the host's forwarding setup or configure the actual reachable HMS address.
+Connection failures discard the SQL pool and retry a read-only lookup once;
+slow queries and rejected logins are not retried.
+
+For hospital operation, keep LIS and HMS on dedicated, always-on hosts with a
+stable LAN route and SQL TCP port where possible. Remote Tailscale servers should
+use unattended operation and a managed device-key expiry policy. Verify the
+route from inside Docker after reboot, network loss and recovery. Relevant
+vendor guidance: [unattended Tailscale](https://tailscale.com/docs/how-to/run-unattended)
+and [device-key expiry](https://tailscale.com/docs/features/access-control/key-expiry).
+Offline HMS patients require a separately designed, approved synchronization
+process; existing LIS registrations remain searchable during HMS outages.
+
+Database load and storage controls: Prisma and direct SQL share a pool capped at
+`DATABASE_POOL_MAX` (default 10 per backend process). Compose forwards this setting.
+Database statements default to a 30 s server timeout, lock waits to 5 s, and idle
+transactions to 30 s. Prefix lookup indexes cover UHID, mobile, name and accession
+for active records. These bounds reduce overload impact; they do not establish a
+production capacity rating. Measure representative concurrent workloads before
+adding more backend replicas, and reserve connections for backups and operations.
+
+Run `scripts/Test-Storage.ps1` regularly: it measures database/table size, connection
+usage, autovacuum, uploaded-report bytes, backups, Docker storage and real Windows
+free space, warning at 80% usage or below 10 GB free. Docker Desktop virtual-disk
+free space must be checked against its Windows backing drive. Logs rotate at
+5 MB with three files per Compose service; verified daily dumps retain the newest
+30 by default. Storage still grows with records, attachments, WAL and backups.
+Allow for retained backups plus the next complete dump; uploaded 10 MB report
+files can dominate growth and are included in every full backup. Medical records
+are not automatically deleted. Arrange monitoring, expansion and tested restore
+procedures; a read-only storage script by itself sends no alerts. Docker build
+cache is separate from patient data and should be reviewed during maintenance.
+
+The default report appearance uses a white letterhead, restrained blue accents,
+two aligned patient-detail columns, bold labels and an embedded bold font for PDF
+headings. Existing saved designs retain their settings until explicitly updated.
+The maintenance command `node dist/src/scripts/applyCleanReportDesign.js REVISION`
+applies the clean appearance to the current saved design, requires its current
+revision, preserves hospital identity/wording/labels, and stores before/after
+settings in the system audit log. Previously downloaded PDFs retain their layout.

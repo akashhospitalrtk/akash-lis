@@ -10,7 +10,7 @@ import { hasRole } from './permissionService.js';
 import { removeClinicalRecord } from './recordDeletionService.js';
 import type { DeleteReportInput } from '../schemas/orderSchemas.js';
 import { parseCsv, csvDocument } from '../utils/csv.js';
-import type { SearchInput } from '../schemas/commonSchemas.js';
+import type { PatientHistorySearchInput } from '../schemas/patientSchemas.js';
 import type { SessionUser } from '../schemas/authSchemas.js';
 import type { CreateOrderInput, SaveResultsInput, AmendmentInput, OrderIdsInput, RecordsExportInput, CsvImportInput, ChangeTestsInput, WorklistInput } from '../schemas/orderSchemas.js';
 
@@ -63,18 +63,22 @@ export async function listWorklist(input: WorklistInput) {
   return rows;
 }
 
-export async function patientHistory(input: SearchInput) {
+export async function patientHistory(input: PatientHistorySearchInput) {
   const query = input.query;
-  if (query.length < 2) return [];
-  const value = `%${query}%`;
+  if (!query) return [];
+  const escaped = query.replace(/[~%_]/g, (char) => `~${char}`);
+  const value = input.match === 'prefix' ? `${escaped}%` : `%${escaped}%`;
   const { rows } = await pool.query(
-    `SELECT DISTINCT ON (COALESCE(NULLIF(uhid, ''), NULLIF(mobile, ''), patient_name))
-      id, uhid, patient_name AS name, age_years, age_value, age_unit, gender, mobile, referring_doctor, patient_type
+    `WITH patients AS (SELECT DISTINCT ON (COALESCE('uhid:' || NULLIF(uhid, ''), 'external:' || NULLIF(external_patient_id, ''), 'order:' || id::text))
+      id, uhid, patient_name AS name, age_years, age_value, age_unit, gender, mobile, referring_doctor, patient_type,
+      CASE WHEN lower(uhid) = lower($2) OR lower(mobile) = lower($2) OR lower(patient_name) = lower($2) OR lower(accession_no) = lower($2) THEN 0 ELSE 1 END AS match_rank,
+      created_at
      FROM lab_orders
-     WHERE deleted_at IS NULL AND (uhid ILIKE $1 OR mobile ILIKE $1 OR patient_name ILIKE $1 OR accession_no ILIKE $1)
-     ORDER BY COALESCE(NULLIF(uhid, ''), NULLIF(mobile, ''), patient_name), created_at DESC
-     LIMIT 12`,
-    [value]
+     WHERE deleted_at IS NULL AND (lower(uhid) LIKE lower($1) ESCAPE '~' OR lower(mobile) LIKE lower($1) ESCAPE '~' OR lower(patient_name) LIKE lower($1) ESCAPE '~' OR lower(accession_no) LIKE lower($1) ESCAPE '~')
+     ORDER BY COALESCE('uhid:' || NULLIF(uhid, ''), 'external:' || NULLIF(external_patient_id, ''), 'order:' || id::text), created_at DESC, id)
+     SELECT id, uhid, name, age_years, age_value, age_unit, gender, mobile, referring_doctor, patient_type
+     FROM patients ORDER BY match_rank, created_at DESC, name, id LIMIT $3`,
+    [value, query, input.limit ?? 12]
   );
   return rows;
 }

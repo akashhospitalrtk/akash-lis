@@ -273,6 +273,12 @@ ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES users(id);
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
 
+-- Case-insensitive prefix lookups use these partial indexes without indexing deleted records.
+CREATE INDEX IF NOT EXISTS lab_orders_uhid_prefix_idx ON lab_orders (lower(uhid) text_pattern_ops) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS lab_orders_mobile_prefix_idx ON lab_orders (lower(mobile) text_pattern_ops) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS lab_orders_name_prefix_idx ON lab_orders (lower(patient_name) text_pattern_ops) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS lab_orders_accession_prefix_idx ON lab_orders (lower(accession_no) text_pattern_ops) WHERE deleted_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS clinical_notes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES lab_orders(id),
@@ -293,3 +299,22 @@ CREATE TABLE IF NOT EXISTS report_template (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 INSERT INTO report_template (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- Outside laboratory referrals and original reports are included in database backups.
+CREATE TABLE IF NOT EXISTS outside_lab_referrals (
+  order_id UUID PRIMARY KEY REFERENCES lab_orders(id) ON DELETE CASCADE,
+  lab_name VARCHAR(160) NOT NULL,
+  reference VARCHAR(120) NOT NULL DEFAULT '',
+  sent_at TIMESTAMPTZ,
+  notes VARCHAR(2000) NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS outside_lab_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id UUID NOT NULL REFERENCES outside_lab_referrals(order_id) ON DELETE CASCADE,
+  filename VARCHAR(180) NOT NULL,
+  mime_type VARCHAR(40) NOT NULL CHECK(mime_type IN ('application/pdf','image/jpeg','image/png')),
+  content BYTEA NOT NULL CHECK(octet_length(content) BETWEEN 1 AND 10485760),
+  uploaded_by UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS outside_lab_reports_order_idx ON outside_lab_reports(order_id,created_at DESC);

@@ -31,7 +31,7 @@ try {
     foreach ($folder in @('scripts','docker','database','docs')) { New-Item -ItemType Directory -Path (Join-Path $destination $folder) | Out-Null }
     foreach ($file in @('README.md','TECHNICAL.md')) { Copy-Item -LiteralPath $file -Destination $destination }
     foreach ($file in @('catalogue-setup.md','india-catalogue.md','analyzer-integration.md')) { Copy-Item -LiteralPath "docs/$file" -Destination (Join-Path $destination 'docs') }
-    foreach ($file in @('Start-LIS.ps1','Initialize-Client.ps1','Test-Storage.ps1','Test-Backup.ps1','Inspect-HMS.sql')) { Copy-Item -LiteralPath "scripts/$file" -Destination (Join-Path $destination 'scripts') }
+    foreach ($file in @('Start-LIS.ps1','Initialize-Client.ps1','Test-Storage.ps1','Test-HMS.ps1','Test-Backup.ps1','Inspect-HMS.sql')) { Copy-Item -LiteralPath "scripts/$file" -Destination (Join-Path $destination 'scripts') }
     Copy-Item -LiteralPath docker/backup.sh -Destination (Join-Path $destination 'docker')
     foreach ($file in @('001_schema.sql','002_seed_profiles.sql')) { Copy-Item -LiteralPath "database/$file" -Destination (Join-Path $destination 'database') }
     $releaseNotes = @"

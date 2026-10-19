@@ -62,7 +62,7 @@ try {
     if (count === 2) assert.ok(measurements.aligned);
     assert.ok(measurements.fits);
   }
-  await checkColumns(3);
+  await checkColumns(2);
   const groups = await page.locator('.letterhead-header').evaluate(el => {
     const brand = el.querySelector('.letterhead-brand'), contact = el.querySelector('.letterhead-contact');
     return { left: getComputedStyle(brand).textAlign, right: getComputedStyle(contact).textAlign, gap: contact.getBoundingClientRect().left - brand.getBoundingClientRect().right };
@@ -74,13 +74,13 @@ try {
   order.patient_name = 'Synthetic Very Long Patient Name '.repeat(4);
   await page.reload();
   await page.locator('.report-patient-name').first().waitFor();
-  await checkColumns(3);
+  await checkColumns(2);
   await page.setViewportSize({ width: 390, height: 900 });
   await checkColumns(1);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await page.emulateMedia({ media: 'print' });
   await page.setViewportSize({ width: 794, height: 1123 });
-  await checkColumns(3);
+  await checkColumns(2);
   // The supported Print report action now opens the canonical server PDF, not
   // window.print() on this HTML draft. Its output is covered by the integration test.
   assert.deepEqual(errors, []);

@@ -83,6 +83,13 @@ nav button:hover:not(:disabled), nav button.nav-active { background: #e5f1ed; co
 .patient-typeahead:has(.lookup-spinner) .search-icon-button { visibility: hidden; }
 .patient-suggestions { max-width: 760px; }
 .hospital-master-button { display: none; }
+.patient-autocomplete { display: grid; gap: .25rem; padding: .35rem; margin: .5rem 0 1rem; border: 1px solid #c8e0e7; border-radius: 9px; background: #fff; box-shadow: 0 4px 14px #20596a12; }
+.patient-autocomplete button { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .65rem .75rem; background: transparent; color: #20596a; text-align: left; }
+.patient-autocomplete button:hover, .patient-autocomplete button[aria-selected="true"] { background: #e9f6f9; }
+.patient-suggestion-detail { display: grid; gap: .2rem; min-width: 0; }
+.patient-suggestion-detail strong { font-size: .9rem; }
+.patient-suggestion-detail small { font-size: .75rem; font-weight: 500; color: #587069; overflow-wrap: anywhere; }
+.patient-source-badge { flex: 0 0 auto; padding: .18rem .4rem; border-radius: 4px; background: #e9f1f4; font-size: .65rem; font-weight: 700; }
 .match-list::before { color: #587069; font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .patient-suggestions::before { content: "LIS database"; }
 .match-list:not(.patient-suggestions)::before { content: "Hospital database"; }
@@ -384,3 +391,8 @@ input[data-result-input][type="number"]::-webkit-outer-spin-button { margin: 0; 
   .result-row > :nth-child(n) { display: block; min-width: 0; }
   .result-row > :nth-child(4)::before { content: 'Reference: '; font-weight: 700; }
 }
+.outside-lab { margin: 1rem 0; }
+.outside-lab .toolbar-actions { margin-top: .8rem; }
+.outside-upload { display:flex; align-items:end; flex-wrap:wrap; gap:1rem; margin-top:1rem; }
+.outside-upload label { display:grid; gap:.4rem; }
+.outside-lab li { margin:.45rem 0; }

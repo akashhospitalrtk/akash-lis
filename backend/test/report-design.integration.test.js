@@ -25,7 +25,7 @@ test('report design persists, is admin-only, rejects stale edits and controls re
   const admin = bootstrap.status === 201 ? bootstrap.body.data : (await request('/auth/login', null, 'POST', { username: 'design_admin', password })).body.data;
   assert.equal((await request('/report-template')).status, 401);
   const initial = (await request('/report-template', admin.token)).body.data;
-  assert.equal(initial.template.patientLayout, 'three-column');
+  assert.equal(initial.template.patientLayout, 'minimal');
   for (const role of ['IT', 'TECHNICIAN', 'AUTHORIZER', 'DOCTOR', 'CATALOGUE_MANAGER']) {
     const username = `design_${role.toLowerCase()}`;
     assert.ok([201, 409].includes((await request('/users', admin.token, 'POST', { username, fullName: username, password, roles: [role] })).status));
@@ -85,7 +85,8 @@ test('report design persists, is admin-only, rejects stale edits and controls re
   const pdf = await task.promise;
   const content = (await (await pdf.getPage(1)).getTextContent()).items;
   assert.ok(content.some(item => item.str === 'CUSTOM LAB'));
-  assert.equal(content.find(item => item.str === 'CUSTOM LAB').height, 40);
+  const brandHeight = content.find(item => item.str === 'CUSTOM LAB').height;
+  assert.ok(brandHeight > 35 && brandHeight <= 40, 'configured font fits within its bounded header box');
   await task.destroy();
   await page.goto(`${ui}/orders/${order.id}/report`);
   await page.getByRole('button', { name: 'Print report', exact: true }).click();

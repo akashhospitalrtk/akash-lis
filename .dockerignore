@@ -1,6 +1,8 @@
 .git
 .agents
 .codex
+.test-tools
+backend/test-results
 **/node_modules
 **/dist
 **/.vite-temp

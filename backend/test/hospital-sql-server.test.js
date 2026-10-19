@@ -15,8 +15,39 @@ test('HMS search binds input and escapes wildcard searches', () => {
   assert.match(query, /FROM \[dbo\]\.\[LisPatientLookup\]/);
   assert.equal(patientSearchParameters('A%_[').prefix, 'A~%~_~[%');
   assert.equal(patientSearchParameters('A~B').prefix, 'A~~B%');
-  assert.throws(() => patientSearchParameters('x'));
+  assert.equal(patientSearchParameters('1').prefix, '1%');
+  assert.equal(patientSearchParameters('12').prefix, '12%');
+  assert.throws(() => patientSearchParameters(''));
+  const prefixQuery = patientSearchStatement('dbo.LisPatientLookup', 5, 'prefix');
+  assert.match(prefixQuery, /TOP \(5\)/);
+  assert.match(prefixQuery, /\[uhid\] LIKE @prefix ESCAPE '~'/);
+  assert.match(prefixQuery, /\[mobile\] LIKE @prefix ESCAPE '~'/);
+  for (const limit of [0, 21, 1.5, '5;DELETE']) assert.throws(() => patientSearchStatement('dbo.LisPatientLookup', limit, 'prefix'));
   for (const view of ['dbo.x;DELETE', 'other.dbo.x', 'dbo.[x]', 'dbo.x --']) assert.throws(() => patientSearchStatement(view));
+});
+
+test('SQL Server lookup recovers from a dropped connection without retrying slow queries or login failures', async (t) => {
+  await closeHospitalSqlServer();
+  let connections = 0, requests = 0, closes = 0;
+  let failure = { code: 'ESOCKET' };
+  t.mock.method(sql.ConnectionPool.prototype, 'connect', async function () { connections += 1; return this; });
+  t.mock.method(sql.ConnectionPool.prototype, 'close', async () => { closes += 1; });
+  t.mock.method(sql.ConnectionPool.prototype, 'request', () => ({
+    input() { return this; },
+    async query() { requests += 1; if (failure) { const error = failure; failure = null; throw error; } return { recordset: [infant] }; }
+  }));
+  try {
+    assert.deepEqual(await findSqlServerPatients('1', { limit: 5, match: 'prefix' }), [infant]);
+    assert.equal(connections, 2);
+    assert.equal(requests, 2);
+    assert.equal(closes, 1);
+    failure = { code: 'ETIMEOUT', name: 'RequestError' };
+    await assert.rejects(findSqlServerPatients('12'), (error) => error.code === 'UPSTREAM_TIMEOUT');
+    assert.equal(requests, 3);
+    failure = { code: 'ELOGIN' };
+    await assert.rejects(findSqlServerPatients('12'), (error) => error.code === 'UPSTREAM_AUTH_ERROR');
+    assert.equal(requests, 4);
+  } finally { await closeHospitalSqlServer(); }
 });
 
 const infant = { id: 'synthetic-1', uhid: 'TEST-1', name: 'Synthetic Infant', age: 3, age_unit: 'days', gender: 'Female', mobile: null, referringDoctor: null, patientType: 'OPD' };
@@ -50,7 +81,7 @@ test('SQL Server adapter executes a bound SELECT and hides driver errors', async
   };
   t.mock.method(sql.ConnectionPool.prototype, 'connect', async function () {
     assert.equal(this.config.pool.max, 2);
-    assert.equal(this.config.requestTimeout, 5000);
+    assert.equal(this.config.requestTimeout, config.externalPatients.sqlServer.requestTimeout);
     return this;
   });
   t.mock.method(sql.ConnectionPool.prototype, 'request', () => request);

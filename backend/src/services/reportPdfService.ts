@@ -24,6 +24,7 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
   const doc = new PDFDocument({ size: 'A4', margins: { top: bodyTop, bottom: height - bodyBottom, left, right: left }, bufferPages: true,
     info: { Title: `Laboratory report ${report.accession_no}`, Author: `${t.brandName} ${t.subtitle}` } });
   doc.registerFont('Body', assetFile('fonts/NotoSans.ttf'));
+  doc.registerFont('BodyBold', assetFile('fonts/Inter-Bold.woff'));
   doc.registerFont('Hindi', assetFile('fonts/NotoSansDevanagari.ttf'));
   const emblem = assetFile('letterhead/emblem.png'), badge = assetFile('letterhead/beti-bachao.png');
   const chunks: Buffer[] = [];
@@ -46,15 +47,15 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
   }
   function labelAt(value: string, x: number, y: number, w: number, size: number, continued = false) {
     const bold = t.patientLabelWeight === 'bold';
-    doc.font(/[\u0900-\u097f]/.test(value) ? 'Hindi' : 'Body').fontSize(size).fillColor(bold ? '#252536' : '#555567').strokeColor('#252536').lineWidth(.22);
-    doc.text(value, x, y, { width: w, lineGap: 2, stroke: bold, fill: true, continued });
+    doc.font(/[\u0900-\u097f]/.test(value) ? 'Hindi' : bold ? 'BodyBold' : 'Body').fontSize(size).fillColor(bold ? '#252536' : '#555567');
+    doc.text(value, x, y, { width: w, lineGap: 2, stroke: false, fill: true, continued });
     return doc.y;
   }
   function patientValueAt(value: string, x: number, y: number, w: number, size: number, continued = false) {
     const runs = value.split(/([\u0900-\u097f\u200c\u200d]+)/).filter(Boolean);
     runs.forEach((run, index) => {
-      doc.font(/[\u0900-\u097f]/.test(run) ? 'Hindi' : 'Body').fontSize(size).fillColor('#252531').strokeColor('#252531').lineWidth(.22)
-        .text(run, x, y, { width: w, lineGap: 2, stroke: t.patientValueWeight === 'bold', fill: true, continued: continued || index < runs.length - 1 });
+      doc.font(/[\u0900-\u097f]/.test(run) ? 'Hindi' : t.patientValueWeight === 'bold' ? 'BodyBold' : 'Body').fontSize(size).fillColor('#252531')
+        .text(run, x, y, { width: w, lineGap: 2, stroke: false, fill: true, continued: continued || index < runs.length - 1 });
     });
     return doc.y;
   }
@@ -85,34 +86,36 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
   function drawLetterhead() {
     doc.save();
     doc.rect(0, 0, width, headerHeight).fill(t.bandColor);
-    doc.image(emblem, 10, 10, { fit: [58, headerHeight - 18] });
+    doc.image(emblem, left, 25, { fit: [32, 42] });
     // Shared left edge and explicit single-line brand boxes avoid metric-driven
     // wrapping/shrinking that made the printed header unlike the screen guide.
     function brandLine(value: string, y: number, h: number, requested: number) {
-      doc.font(/[\u0900-\u097f]/.test(value) ? 'Hindi' : 'Helvetica');
+      doc.font(/[\u0900-\u097f]/.test(value) ? 'Hindi' : 'BodyBold');
       let size = Math.min(requested, h);
       while (size > 5 && doc.fontSize(size).widthOfString(value) > 262) size -= .25;
       const measured = doc.fontSize(size).widthOfString(value);
-      const x = 80 + (t.headerAlignment === 'right' ? 262 - measured : t.headerAlignment === 'center' ? (262 - measured) / 2 : 0);
+      const x = 90 + (t.headerAlignment === 'right' ? 262 - measured : t.headerAlignment === 'center' ? (262 - measured) / 2 : 0);
       doc.fillColor(t.bandTextColor).text(value, x, y, { lineBreak: false });
     }
-    brandLine(t.brandName, 8, headerHeight * .68, t.brandFontPt);
-    brandLine(t.subtitle, headerHeight * .72, headerHeight * .25, t.subtitleFontPt);
-    const contactLeft = 343 + t.headerGapMm * mm, contactText = contactLeft + 19, contactWidth = width - 14 - contactText;
-    fitted(t.phone, contactText, 17, contactWidth, 19, t.contactFontPt + 3, t.bandTextColor, t.headerContactAlignment, 'phone');
-    fitted(t.address, contactText, 40, contactWidth, headerHeight * .32, t.contactFontPt, t.bandTextColor, t.headerContactAlignment, 'pin');
-    fitted(t.locationLine, contactText, headerHeight - 25, contactWidth, 22, t.contactFontPt + 3.5, t.bandTextColor, t.headerContactAlignment);
+    brandLine(t.brandName, 24, headerHeight * .48, t.brandFontPt);
+    brandLine(t.subtitle, headerHeight * .7, headerHeight * .22, t.subtitleFontPt);
+    const contactLeft = 352 + t.headerGapMm * mm, contactText = contactLeft + 17, contactWidth = width - left - contactText;
+    fitted(t.phone, contactText, 23, contactWidth, 15, t.contactFontPt + 1, t.bandTextColor, t.headerContactAlignment, 'phone');
+    fitted(t.address, contactText, 42, contactWidth, headerHeight * .32, t.contactFontPt, t.bandTextColor, t.headerContactAlignment, 'pin');
+    fitted(t.locationLine, contactText, headerHeight - 16, contactWidth, 14, t.contactFontPt, t.bandTextColor, t.headerContactAlignment);
+    doc.strokeColor('#214e70').lineWidth(1.2).moveTo(left, headerHeight).lineTo(width - left, headerHeight).stroke();
     doc.save().opacity(t.watermarkOpacity).image(emblem, 90, 185, { width: 415, height: 498 }).restore();
     const footerTop = height - footerHeight, bandHeight = footerHeight * .45, servicesHeight = footerHeight - bandHeight;
-    const callX = t.showBadge ? 435 : 486;
-    const copyWidth = callX - 12 - t.footerGapMm * mm;
-    fitted(`• ${t.supportLine}`, 12, footerTop + 4, copyWidth, servicesHeight * .27, t.footerFontPt, t.footerTextColor, t.footerAlignment);
-    fitted(t.servicesLine, 12, footerTop + servicesHeight * .32, copyWidth, servicesHeight * .4, t.footerFontPt, t.footerTextColor, t.footerAlignment);
-    fitted(t.facilitiesLine, 12, footerTop + servicesHeight * .74, copyWidth, servicesHeight * .25, t.footerFontPt, t.footerTextColor, t.footerAlignment);
+    const callX = t.showBadge ? 409 : width - left - 87;
+    const copyWidth = callX - left - t.footerGapMm * mm;
+    doc.strokeColor('#c7d5df').lineWidth(.5).moveTo(left, footerTop).lineTo(width - left, footerTop).stroke();
+    fitted(t.supportLine, left, footerTop + 5, copyWidth, servicesHeight * .27, t.footerFontPt, t.footerTextColor, t.footerAlignment);
+    fitted(t.servicesLine, left, footerTop + servicesHeight * .32, copyWidth, servicesHeight * .4, t.footerFontPt, t.footerTextColor, t.footerAlignment);
+    fitted(t.facilitiesLine, left, footerTop + servicesHeight * .74, copyWidth, servicesHeight * .25, t.footerFontPt, t.footerTextColor, t.footerAlignment);
     fitted(`Helpline No.\n${t.phone}`, callX, footerTop + servicesHeight * .45, 87, servicesHeight * .52, t.helplineFontPt, t.helplineColor, t.footerContactAlignment);
-    if (t.showBadge) doc.image(badge, 535, footerTop, { fit: [49, servicesHeight - 2] });
+    if (t.showBadge) doc.image(badge, width - left - 45, footerTop + 4, { fit: [45, servicesHeight - 6] });
     doc.rect(0, height - bandHeight, width, bandHeight).fill(t.footerBandColor);
-    fitted(t.disclaimerLines.filter(Boolean).map(line => `• ${line}`).join('\n'), 12, height - bandHeight + 4, width - 24, bandHeight - 7, t.disclaimerFontPt, t.footerBandTextColor, t.footerAlignment);
+    fitted(t.disclaimerLines.filter(Boolean).map(line => `• ${line}`).join('\n'), left, height - bandHeight + 4, contentWidth, bandHeight - 7, t.disclaimerFontPt, t.footerBandTextColor, t.footerAlignment);
     doc.restore(); doc.x = left; doc.y = bodyTop;
   }
   let activeTest: string | null = null;
@@ -121,13 +124,13 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
   function tableHeader(title?: string) {
     if (title) { at(`${title} (continued)`, left, doc.y, contentWidth, t.bodyFontPt + 1); doc.moveDown(.3); }
     const y = doc.y;
-    doc.rect(left, y, contentWidth, 24).fill('#eef0f5');
+    doc.rect(left, y, contentWidth, 24).fill('#edf3f7');
     ['Test name', 'Result', 'Unit', 'Reference range'].forEach((label, i) => {
-      doc.font('Helvetica-Bold').fontSize(t.bodyFontPt).fillColor('#303038');
+      doc.font('BodyBold').fontSize(t.bodyFontPt - .5).fillColor('#214e70');
       const offset = i === 1 ? tableWidths[i] - doc.widthOfString(label) : i === 2 ? (tableWidths[i] - doc.widthOfString(label)) / 2 : 0;
       doc.text(label, tableColumns[i] + offset, y + 7, { lineBreak: false });
     });
-    doc.strokeColor('#9298a6').lineWidth(.6).moveTo(left, y).lineTo(width - left, y).stroke();
+    doc.strokeColor('#c7d5df').lineWidth(.5).moveTo(left, y).lineTo(width - left, y).stroke();
     doc.moveTo(left, y + 24).lineTo(width - left, y + 24).stroke();
     doc.x = left; doc.y = y + 31;
   }
@@ -136,7 +139,7 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
   function space(needed: number) { if (doc.y + needed > bodyBottom) doc.addPage(); }
   function heading(value: string) { space(60); doc.x = left; doc.moveDown(.4); text(value, t.bodyFontPt + 2); doc.moveDown(.3); }
 
-  text('Authorized laboratory report', 8, '#616172'); doc.moveDown(.5);
+  text(report.authorized_at ? 'AUTHORIZED LABORATORY REPORT' : 'LABORATORY REPORT — PREVIEW', 9, '#214e70'); doc.moveDown(.5);
   const age = report.age_value ?? report.age_years;
   const ageText = age != null ? `${age} ${report.age_value != null ? report.age_unit || 'years' : 'years'}` : '-';
   const l = t.labels, patientTop = doc.y;
@@ -209,7 +212,7 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
     const startHeight = 16 + measure(test.profile_name, t.bodyFontPt + 2) + 31 + (rows[0]?.needed || 0);
     space(panelHeight <= bodyBottom - bodyTop ? panelHeight : startHeight <= bodyBottom - bodyTop ? startHeight : 65);
     doc.y += 8;
-    at(test.profile_name, left, doc.y, contentWidth, t.bodyFontPt + 2, '#252531', 'center'); doc.y += 8;
+    at(test.profile_name, left, doc.y, contentWidth, t.bodyFontPt + 2, '#214e70'); doc.y += 8;
     activeTest = test.profile_name; tableHeader();
     for (const { result, values, needed } of rows) {
       const cells: [string, number, number][] = values.map((value, i) => [value, tableColumns[i], tableWidths[i]]);

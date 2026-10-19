@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import { authenticate, allowRoles } from '../middleware/auth.js';
 import { validate, validateParams } from '../middleware/validate.js';
-import { idParamsSchema, searchSchema } from '../schemas/commonSchemas.js';
+import { idParamsSchema } from '../schemas/commonSchemas.js';
 import { recordsExportSchema, worklistSchema, orderIdsSchema, createOrderSchema, saveResultsSchema, csvImportSchema, amendmentSchema, changeTestsSchema, deleteReportSchema } from '../schemas/orderSchemas.js';
 import * as controller from '../controllers/orderController.js';
 import { updatePatientSchema } from '../schemas/orderSchemas.js';
+import { patientHistorySearchSchema } from '../schemas/patientSchemas.js';
 
 export const orderRoutes = Router();
 orderRoutes.put('/orders/:id/patient', authenticate, allowRoles('ADMIN'), validateParams(idParamsSchema), validate(updatePatientSchema), controller.updatePatient);
 orderRoutes.get('/records/export', authenticate, allowRoles('ADMIN'), validate(recordsExportSchema, 'query'), controller.exportRecords);
 orderRoutes.get('/worklist', authenticate, allowRoles('ADMIN', 'TECHNICIAN', 'AUTHORIZER'), validate(worklistSchema, 'query'), controller.listWorklist);
-orderRoutes.get('/patient-history', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validate(searchSchema, 'query'), controller.patientHistory);
+orderRoutes.get('/patient-history', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validate(patientHistorySearchSchema, 'query'), controller.patientHistory);
 orderRoutes.post('/orders/samples/accept', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validate(orderIdsSchema), controller.acceptSamples);
 orderRoutes.post('/orders', authenticate, allowRoles('ADMIN', 'TECHNICIAN'), validate(createOrderSchema), controller.createOrder);
 orderRoutes.get('/orders/:id', authenticate, allowRoles('ADMIN', 'TECHNICIAN', 'AUTHORIZER'), validateParams(idParamsSchema), controller.getOrder);

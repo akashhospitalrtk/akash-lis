@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './loadEnv.js';
 import { envSchema } from '../schemas/envSchema.js';
 
 const env = envSchema.parse(process.env);
@@ -12,6 +12,8 @@ export const config = {
   allowedOrigins: (env.CORS_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean),
   databaseSsl: env.DATABASE_SSL === 'true',
   databasePoolMax: env.DATABASE_POOL_MAX,
+  databaseStatementTimeout: env.DATABASE_STATEMENT_TIMEOUT_MS,
+  databaseLockTimeout: env.DATABASE_LOCK_TIMEOUT_MS,
   hospital: {
     name: env.HOSPITAL_NAME,
     address: env.HOSPITAL_ADDRESS || '',
@@ -24,6 +26,7 @@ export const config = {
     sqlServer: {
       server: env.HMS_SQL_SERVER,
       port: env.HMS_SQL_PORT,
+      requestTimeout: env.HMS_SQL_REQUEST_TIMEOUT_MS,
       database: env.HMS_SQL_DATABASE,
       user: env.HMS_SQL_USER,
       password: env.HMS_SQL_PASSWORD,

@@ -14,11 +14,11 @@ const report = {
 
 test('header alignment and font sizes affect the actual PDF', async () => {
   async function brand(alignment) {
-    const bytes = await makeReportPdf(report, { ...defaultReportTemplate, brandName: 'CUSTOM LAB', brandFontPt: 40, headerAlignment: alignment });
+    const bytes = await makeReportPdf(report, { ...defaultReportTemplate, brandName: 'TEST LAB', brandFontPt: 40, headerAlignment: alignment });
     const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
     try {
       const pdf = await task.promise;
-      return (await (await pdf.getPage(1)).getTextContent()).items.find(item => item.str === 'CUSTOM LAB');
+      return (await (await pdf.getPage(1)).getTextContent()).items.find(item => item.str === 'TEST LAB');
     } finally { await task.destroy(); }
   }
   const left = await brand('left'), center = await brand('center'), right = await brand('right');
@@ -33,14 +33,14 @@ test('split letterhead keeps branding left and contact details right with indepe
     const pdf = await task.promise;
     const { items } = await (await pdf.getPage(1)).getTextContent();
     const brand = items.find(item => item.str === 'CUSTOM LAB');
-    assert.equal(brand.transform[4], 80);
+    assert.equal(brand.transform[4], 90);
     const phone = items.find(item => item.str === defaultReportTemplate.phone && item.transform[5] > 700);
-    assert.ok(Math.abs(phone.transform[4] + phone.width - (595.28 - 14)) < 1);
-    assert.ok(phone.transform[4] > 343 + 12 * 72 / 25.4);
+    assert.ok(Math.abs(phone.transform[4] + phone.width - (595.28 - 44)) < 1);
+    assert.ok(phone.transform[4] > 352 + 12 * 72 / 25.4);
     const location = items.find(item => item.str === defaultReportTemplate.locationLine);
-    assert.ok(Math.abs(location.transform[4] + location.width - (595.28 - 14)) < 1);
+    assert.ok(Math.abs(location.transform[4] + location.width - (595.28 - 44)) < 1);
     const footerPhone = items.find(item => item.str === defaultReportTemplate.phone && item.transform[5] < 120);
-    assert.ok(Math.abs(footerPhone.transform[4] + footerPhone.width - 522) < 1);
+    assert.ok(Math.abs(footerPhone.transform[4] + footerPhone.width - (595.28 - 44)) < 1);
   } finally { await task.destroy(); }
 });
 
@@ -60,12 +60,13 @@ test('PDF patient header uses aligned labels and values in two columns', async (
       assert.equal(find(label)?.transform[4], 308, label);
     }
     assert.equal(find('Synthetic Patient')?.transform[4], 143);
+    assert.notEqual(find('Name')?.fontName, find('Synthetic Patient')?.fontName, 'bold labels use an embedded bold font');
     assert.equal(find('TEST-UHID-001')?.transform[4], 407);
     assert.equal(find('Name')?.transform[5], find('UHID / Patient ID')?.transform[5]);
     assert.ok(find('1 months / Male'));
     assert.ok(find('Not recorded'));
     const collected = find('Sample collected');
-    assert.ok(items.some(item => item.str === 'Not recorded' && item.transform[4] === 143 && item.transform[5] === collected.transform[5]), 'registration time is not presented as collection time');
+    assert.ok(items.some(item => item.str === 'Not recorded' && item.transform[4] === 143 && Math.abs(item.transform[5] - collected.transform[5]) < 1.1), 'registration time is not presented as collection time; bold and regular font baselines align');
     assert.equal(pdf.numPages, 1);
   } finally { await task.destroy(); }
 });
@@ -103,12 +104,12 @@ test('letterhead repeats on every page and long results and notes stay inside re
       assert.deepEqual(positions, fixedPositions, `page ${p}: letterhead stays fixed`);
       for (const item of items.filter(i => /Measurement-\d+/.test(i.str) || i.str.includes('Clinical note text.') || i.str.includes('Long explanatory text.'))) {
         const y = 841.89 - item.transform[5];
-        assert.ok(y > 38 * 72 / 25.4 && y < 841.89 - 34 * 72 / 25.4 - 90, `page ${p}: content stays above signature y=${y}`);
+        assert.ok(y > defaultReportTemplate.headerHeightMm * 72 / 25.4 && y < 841.89 - defaultReportTemplate.footerHeightMm * 72 / 25.4 - 90, `page ${p}: content stays above signature y=${y}`);
       }
     }
     assert.ok(all.includes('Measurement-64'));
-    assert.ok(all.includes('END-DESCRIPTION'));
-    assert.ok(all.includes('FINAL-NOTE-TEXT'));
+    assert.ok(all.replace(/\s+/g, '').includes('END-DESCRIPTION'));
+    assert.ok(all.replace(/\s+/g, '').includes('FINAL-NOTE-TEXT'));
   } finally { await task.destroy(); }
 });
 
@@ -133,7 +134,7 @@ test('amendment history stays off the patient PDF and multiple panels retain res
       }
       for (const item of items.filter(item => item.str.startsWith('Analyte '))) {
         const y = 841.89 - item.transform[5];
-        assert.ok(y > 38 * 72 / 25.4 && y < 841.89 - 34 * 72 / 25.4 - 10);
+        assert.ok(y > defaultReportTemplate.headerHeightMm * 72 / 25.4 && y < 841.89 - defaultReportTemplate.footerHeightMm * 72 / 25.4 - 10);
       }
     }
     assert.doesNotMatch(all, /amend|revision|INTERNAL-ONLY/i);
@@ -203,12 +204,12 @@ test('oversized investigations break only between complete ordinary parameters',
 });
 
 test('long names wrap within the PDF column, retaining missing-value fallbacks', async () => {
-  const bytes = await makeReportPdf({ ...report, patient_name: 'Synthetic very long patient name '.repeat(4) + 'END-NAME', uhid: null, authorized_at: null }, { ...defaultReportTemplate, patientLayout: 'bordered' });
+  const bytes = await makeReportPdf({ ...report, patient_name: 'Synthetic very long patient name '.repeat(4) + 'ENDNAME', uhid: null, authorized_at: null }, { ...defaultReportTemplate, patientLayout: 'bordered' });
   const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
   try {
     const pdf = await task.promise;
     const { items } = await (await pdf.getPage(1)).getTextContent();
-    const end = items.find(item => item.str.includes('END-NAME'));
+    const end = items.find(item => item.str.includes('ENDNAME'));
     const next = items.find(item => item.str === 'Age / Gender');
     assert.ok(end && next);
     assert.ok(end.transform[5] > next.transform[5], 'next row must be below wrapped name');

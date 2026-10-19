@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, clearToken, getToken } from './api';
 import { LoginScreen, SetupScreen } from './components/AuthScreens';
 import { InvestigationCatalogue } from './components/InvestigationCatalogue';
@@ -55,6 +55,46 @@ export default function App() {
   const [worklistVersion, setWorklistVersion] = useState(0);
   const [appError, setAppError] = useState('');
   const [reportTemplate, setReportTemplate] = useState<ReportTemplateRecord | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuToggleRef = useRef<HTMLButtonElement>(null);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+    menuToggleRef.current?.focus();
+  }, []);
+
+  useEffect(() => { setSidebarOpen(false); }, [page, orderId, user?.id]);
+
+  useEffect(() => {
+    const mobile = window.matchMedia('(max-width: 760px)');
+    const onResize = () => { if (!mobile.matches) setSidebarOpen(false); };
+    mobile.addEventListener('change', onResize);
+    return () => mobile.removeEventListener('change', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const workspace = workspaceRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    workspace?.setAttribute('inert', '');
+    sidebarRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); closeSidebar(); }
+      if (event.key !== 'Tab') return;
+      const controls = [menuToggleRef.current, ...Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]') || [])].filter((element): element is HTMLElement => element !== null);
+      const current = controls.findIndex(element => element === document.activeElement);
+      event.preventDefault();
+      controls[(current + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      workspace?.removeAttribute('inert');
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [sidebarOpen, closeSidebar]);
 
   useEffect(() => {
     if (!user || !['report', 'report-design'].includes(page)) return;
@@ -134,16 +174,17 @@ export default function App() {
 
   return <div className="app-shell">
     <a className="skip-link" href="#workspace">Skip to workspace</a>
-    <aside className="app-sidebar" aria-label="Laboratory navigation">
-      <button className="brand" title={hospital.name} aria-label={`${hospital.name} home`} onClick={() => setPage(homePage(user))}><strong>{hospital.name}</strong><small>Laboratory information system</small></button>
+    {sidebarOpen && <button className="sidebar-backdrop" aria-label="Close navigation" tabIndex={-1} onClick={closeSidebar} />}
+    <aside ref={sidebarRef} id="laboratory-navigation" className={`app-sidebar${sidebarOpen ? ' sidebar-open' : ''}`} aria-label="Laboratory navigation">
+      <button className="brand" title={hospital.name} aria-label={`${hospital.name} home`} onClick={() => { setPage(homePage(user)); if (sidebarOpen) closeSidebar(); }}><strong>{hospital.name}</strong><small>Laboratory information system</small></button>
       <p className="nav-caption">Workspace</p>
-      <nav aria-label="Main navigation">{nav.filter((item) => canOpenPage(user, item.id)).map((item) => <button key={item.id} title={item.label} aria-label={item.label} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-active' : ''} onClick={() => setPage(item.id)}><NavIcon page={item.id} /><span>{item.shortLabel}</span></button>)}</nav>
+      <nav aria-label="Main navigation">{nav.filter((item) => canOpenPage(user, item.id)).map((item) => <button key={item.id} title={item.label} aria-label={item.label} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-active' : ''} onClick={() => { setPage(item.id); if (sidebarOpen) closeSidebar(); }}><NavIcon page={item.id} /><span>{item.shortLabel}</span></button>)}</nav>
       <div className="user-menu"><div className="user-identity"><span className="user-avatar" aria-hidden="true">{user.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('')}</span><span>{user.fullName}<small>{userRoleLabel(user)}</small></span></div><button className="text-button" onClick={logout}>Sign out</button></div>
     </aside>
     <div className="app-workspace">
-    <header className="workspace-header"><div><p className="workspace-title">{nav.find((item) => item.id === page)?.shortLabel}</p><p className="workspace-subtitle">Laboratory workspace</p></div><time className="workspace-date" dateTime={new Date().toLocaleDateString('en-CA')}>{new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</time></header>
+    <header className="workspace-header"><div className="workspace-heading"><button ref={menuToggleRef} type="button" className="mobile-menu-toggle" aria-label={sidebarOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={sidebarOpen} aria-controls="laboratory-navigation" onClick={() => sidebarOpen ? closeSidebar() : setSidebarOpen(true)}><svg viewBox="0 0 24 24" aria-hidden="true">{sidebarOpen ? <path d="m6 6 12 12M6 18 18 6" /> : <path d="M4 6h16M4 12h16M4 18h16" />}</svg></button><div><p className="workspace-title">{nav.find((item) => item.id === page)?.shortLabel}</p><p className="workspace-subtitle">Laboratory workspace</p></div></div><time className="workspace-date" dateTime={new Date().toLocaleDateString('en-CA')}>{new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</time></header>
     {appError && <div className="app-error">{appError}<button onClick={() => setAppError('')}>×</button></div>}
-    <main id="workspace" tabIndex={-1}>
+    <main ref={workspaceRef} id="workspace" tabIndex={-1}>
       {(page === 'exports' && !hasRole(user, 'ADMIN') || page === 'catalogue' && !hasPermission(user, 'catalogue.manage') || page === 'users' && !hasRole(user, 'ADMIN', 'IT')) && <section className="page empty-state"><h1>Access required</h1><button onClick={() => setPage(homePage(user))}>Go to your home page</button></section>}
       {orderLoading && <p className="page loading">Loading selected order…</p>}
       {page === 'patients' && hasRole(user, 'ADMIN', 'TECHNICIAN', 'AUTHORIZER', 'DOCTOR') && <DoctorWorkspace key={orderId || 'patients'} user={user} orderId={orderId} onSelect={(id) => navigate('patients', id)} onReport={(id) => navigate('report', id)} />}

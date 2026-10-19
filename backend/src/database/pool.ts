@@ -6,13 +6,16 @@ export const pool = new pg.Pool({
   connectionString: config.databaseUrl,
   ssl: config.databaseSsl ? { rejectUnauthorized: true } : undefined,
   max: config.databasePoolMax,
+  statement_timeout: config.databaseStatementTimeout,
+  lock_timeout: config.databaseLockTimeout,
+  idle_in_transaction_session_timeout: 30000,
   idleTimeoutMillis: 5000,
   connectionTimeoutMillis: 10000
 });
 if (process.env.VERCEL === '1') attachDatabasePool(pool);
 
-pool.on('error', (error) => {
-  console.error('Unexpected PostgreSQL pool error', error);
+pool.on('error', () => {
+  console.error('Unexpected PostgreSQL pool error');
 });
 
 export async function withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
