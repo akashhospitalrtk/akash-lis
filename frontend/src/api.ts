@@ -1,0 +1,56 @@
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number, public readonly code?: string, public readonly details?: { path: string; message: string }[]) {
+    super(message); this.name = 'ApiError';
+  }
+}
+const baseUrl = import.meta.env.VITE_API_URL || '/api';
+
+export function getToken() { return localStorage.getItem('lis_token'); }
+export function setToken(token: string) { localStorage.setItem('lis_token', token); }
+export function clearToken() { localStorage.removeItem('lis_token'); }
+function handleExpiredSession(response: Response) {
+  if (response.status === 401 && getToken()) {
+    clearToken();
+    window.dispatchEvent(new Event('lis-session-expired'));
+  }
+}
+
+export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(`${baseUrl}${path}`, { ...options, headers });
+  handleExpiredSession(response);
+  if (response.status === 204) return undefined as T;
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(body.message || `Request failed (${response.status})`, response.status, body.code, body.details);
+  if (body.success === true && 'data' in body) return body.data as T;
+  // Permit an older API during a rolling local restart.
+  return body as T;
+}
+
+export async function fetchDocument(path: string) {
+  const token = getToken();
+  const response = await fetch(`${baseUrl}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  handleExpiredSession(response);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new ApiError(body.message || `Download failed (${response.status})`, response.status, body.code, body.details);
+  }
+  return { blob: await response.blob(), filename: response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/i)?.[1], rowCount: Number(response.headers.get('X-Export-Row-Count') || 0) };
+}
+
+export async function download(path: string, fallbackFilename: string) {
+  const document = await fetchDocument(path);
+  const filename = document.filename || fallbackFilename;
+  const url = URL.createObjectURL(document.blob);
+  const link = window.document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  window.document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { filename, rowCount: document.rowCount };
+}

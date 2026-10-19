@@ -1,0 +1,296 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model audit_events {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id   String     @db.Uuid
+  user_id    String?    @db.Uuid
+  event_type String     @db.VarChar(60)
+  details    Json       @default("{}")
+  created_at DateTime   @default(now()) @db.Timestamptz(6)
+  lab_orders lab_orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users?     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([order_id, created_at(sort: Desc)], map: "audit_events_order_idx")
+}
+
+model catalogue_audit_events {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profile_id    String?        @db.Uuid
+  user_id       String?        @db.Uuid
+  event_type    String         @db.VarChar(60)
+  details       Json           @default("{}")
+  created_at    DateTime       @default(now()) @db.Timestamptz(6)
+  test_profiles test_profiles? @relation(fields: [profile_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users         users?         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([profile_id, created_at(sort: Desc)], map: "catalogue_audit_events_profile_idx")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model lab_orders {
+  clinical_notes clinical_notes[]
+  id                                         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accession_no                               String              @unique @db.VarChar(40)
+  patient_source                             String              @default("MANUAL") @db.VarChar(30)
+  external_patient_id                        String?             @db.VarChar(120)
+  uhid                                       String?             @db.VarChar(80)
+  patient_name                               String              @db.VarChar(160)
+  age_value                                  Decimal? @db.Decimal
+  age_unit                                   String @default("years") @db.VarChar(10)
+  deleted_at                                 DateTime? @db.Timestamptz(6)
+  deleted_by                                 String? @db.Uuid
+  deletion_reason                            String?
+  age_years                                  Int?
+  gender                                     String?             @db.VarChar(20)
+  mobile                                     String?             @db.VarChar(30)
+  referring_doctor                           String?             @db.VarChar(160)
+  patient_type                               String?             @db.VarChar(60)
+  sample_date                                DateTime            @db.Timestamptz(6)
+  status                                     order_status        @default(PENDING)
+  created_by                                 String              @db.Uuid
+  authorized_by                              String?             @db.Uuid
+  authorized_at                              DateTime?           @db.Timestamptz(6)
+  printed_at                                 DateTime?           @db.Timestamptz(6)
+  created_at                                 DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at                                 DateTime            @default(now()) @db.Timestamptz(6)
+  amendment_count                            Int                 @default(0)
+  amended_at                                 DateTime?           @db.Timestamptz(6)
+  amended_by                                 String?             @db.Uuid
+  amendment_reason                           String?             @db.VarChar(500)
+  sample_status                              String              @default("REGISTERED") @db.VarChar(30)
+  sample_received_at                         DateTime?           @db.Timestamptz(6)
+  sample_received_by                         String?             @db.Uuid
+  delivered_at                               DateTime?           @db.Timestamptz(6)
+  delivered_by                               String?             @db.Uuid
+  deleted_by_user                            users? @relation("lab_orders_deleted_byTousers", fields: [deleted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  audit_events                               audit_events[]
+  users_lab_orders_amended_byTousers         users?              @relation("lab_orders_amended_byTousers", fields: [amended_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_lab_orders_authorized_byTousers      users?              @relation("lab_orders_authorized_byTousers", fields: [authorized_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_lab_orders_created_byTousers         users               @relation("lab_orders_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_lab_orders_delivered_byTousers       users?              @relation("lab_orders_delivered_byTousers", fields: [delivered_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_lab_orders_sample_received_byTousers users?              @relation("lab_orders_sample_received_byTousers", fields: [sample_received_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_tests                                order_tests[]
+  report_amendments                          report_amendments[]
+
+  @@index([sample_date])
+  @@index([status])
+  @@index([uhid])
+}
+
+model order_tests {
+  description String? @db.VarChar(5000)
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id      String         @db.Uuid
+  profile_id    String?        @db.Uuid
+  profile_code  String         @db.VarChar(40)
+  profile_name  String         @db.VarChar(160)
+  status        order_status   @default(PENDING)
+  remarks       String?        @db.VarChar(2000)
+  sort_order    Int            @default(0)
+  created_at    DateTime       @default(now()) @db.Timestamptz(6)
+  lab_orders    lab_orders     @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  test_profiles test_profiles? @relation(fields: [profile_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  test_results  test_results[]
+}
+
+model profile_parameters {
+  description String? @db.VarChar(5000)
+  loinc_code          String? @db.VarChar(16)
+  reference_note      String? @db.VarChar(2000)
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profile_id          String         @db.Uuid
+  code                String         @db.VarChar(40)
+  name                String         @db.VarChar(160)
+  result_kind         result_kind    @default(NUMERIC)
+  unit                String?        @db.VarChar(40)
+  method              String?        @db.VarChar(240)
+  reference_ranges    Json           @default("[]")
+  select_options      Json           @default("[]")
+  calculation_formula String?        @db.VarChar(300)
+  sort_order          Int            @default(0)
+  active              Boolean        @default(true)
+  suggested_value     String?        @db.VarChar(200)
+  numeric_step        Decimal?       @db.Decimal
+  slider_min          Decimal?       @db.Decimal
+  slider_max          Decimal?       @db.Decimal
+  common_values       Json           @default("[]")
+  critical_low        Decimal?       @db.Decimal
+  critical_high       Decimal?       @db.Decimal
+  test_profiles       test_profiles  @relation(fields: [profile_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  test_results        test_results[]
+
+  @@unique([profile_id, code])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model report_amendments {
+  id                                             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id                                       String     @db.Uuid
+  amendment_no                                   Int
+  reason                                         String     @db.VarChar(500)
+  report_snapshot                                Json
+  started_by                                     String     @db.Uuid
+  created_at                                     DateTime   @default(now()) @db.Timestamptz(6)
+  reauthorized_by                                String?    @db.Uuid
+  reauthorized_at                                DateTime?  @db.Timestamptz(6)
+  printed_at                                     DateTime?  @db.Timestamptz(6)
+  lab_orders                                     lab_orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_report_amendments_reauthorized_byTousers users?     @relation("report_amendments_reauthorized_byTousers", fields: [reauthorized_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_report_amendments_started_byTousers      users      @relation("report_amendments_started_byTousers", fields: [started_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([order_id, amendment_no])
+  @@index([order_id, amendment_no(sort: Desc)], map: "report_amendments_order_idx")
+}
+
+model system_audit_events {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String?  @db.Uuid
+  event_type String   @db.VarChar(60)
+  details    Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users?   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)], map: "system_audit_events_created_idx")
+}
+
+model test_profiles {
+  description String? @db.VarChar(5000)
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                   String                   @unique @db.VarChar(40)
+  name                   String                   @db.VarChar(160)
+  department             String                   @default("Laboratory") @db.VarChar(80)
+  active                 Boolean                  @default(true)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  specimen_type          String?                  @db.VarChar(80)
+  turnaround_time        String?                  @db.VarChar(80)
+  instructions           String?                  @db.VarChar(500)
+  catalogue_audit_events catalogue_audit_events[]
+  order_tests            order_tests[]
+  profile_parameters     profile_parameters[]
+}
+
+model test_results {
+  description String? @db.VarChar(5000)
+  loinc_code          String? @db.VarChar(16)
+  reference_note      String? @db.VarChar(2000)
+  id                                   String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_test_id                        String              @db.Uuid
+  parameter_id                         String?             @db.Uuid
+  parameter_code                       String              @db.VarChar(40)
+  parameter_name                       String              @db.VarChar(160)
+  result_kind                          result_kind
+  result_value                         String?             @db.VarChar(200)
+  unit                                 String?             @db.VarChar(40)
+  method                               String?             @db.VarChar(240)
+  reference_ranges                     Json                @default("[]")
+  select_options                       Json                @default("[]")
+  calculation_formula                  String?             @db.VarChar(300)
+  abnormal_flag                        String?             @db.VarChar(4)
+  comments                             String?             @db.VarChar(400)
+  sort_order                           Int                 @default(0)
+  entered_by                           String?             @db.Uuid
+  entered_at                           DateTime?           @db.Timestamptz(6)
+  updated_by                           String?             @db.Uuid
+  updated_at                           DateTime?           @db.Timestamptz(6)
+  suggested_value                      String?             @db.VarChar(200)
+  numeric_step                         Decimal?            @db.Decimal
+  slider_min                           Decimal?            @db.Decimal
+  slider_max                           Decimal?            @db.Decimal
+  common_values                        Json                @default("[]")
+  critical_low                         Decimal?            @db.Decimal
+  critical_high                        Decimal?            @db.Decimal
+  users_test_results_entered_byTousers users?              @relation("test_results_entered_byTousers", fields: [entered_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_tests                          order_tests         @relation(fields: [order_test_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profile_parameters                   profile_parameters? @relation(fields: [parameter_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_test_results_updated_byTousers users?              @relation("test_results_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([order_test_id, parameter_code])
+}
+
+model users {
+  /// Legacy SQL rows may be NULL; authentication falls back to the role column.
+  roles String[]
+  sensitive_failed_attempts Int @default(0)
+  sensitive_attempt_window DateTime? @db.Timestamptz(6)
+  clinical_notes clinical_notes[]
+  user_departments user_departments[]
+  deleted_orders lab_orders[] @relation("lab_orders_deleted_byTousers")
+  id                                                         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username                                                   String                   @unique @db.VarChar(60)
+  password_hash                                              String
+  full_name                                                  String                   @db.VarChar(120)
+  role                                                       user_role
+  designation                                                String?                  @db.VarChar(120)
+  signature_label                                            String?                  @db.VarChar(160)
+  active                                                     Boolean                  @default(true)
+  created_at                                                 DateTime                 @default(now()) @db.Timestamptz(6)
+  audit_events                                               audit_events[]
+  catalogue_audit_events                                     catalogue_audit_events[]
+  lab_orders_lab_orders_amended_byTousers                    lab_orders[]             @relation("lab_orders_amended_byTousers")
+  lab_orders_lab_orders_authorized_byTousers                 lab_orders[]             @relation("lab_orders_authorized_byTousers")
+  lab_orders_lab_orders_created_byTousers                    lab_orders[]             @relation("lab_orders_created_byTousers")
+  lab_orders_lab_orders_delivered_byTousers                  lab_orders[]             @relation("lab_orders_delivered_byTousers")
+  lab_orders_lab_orders_sample_received_byTousers            lab_orders[]             @relation("lab_orders_sample_received_byTousers")
+  report_amendments_report_amendments_reauthorized_byTousers report_amendments[]      @relation("report_amendments_reauthorized_byTousers")
+  report_amendments_report_amendments_started_byTousers      report_amendments[]      @relation("report_amendments_started_byTousers")
+  system_audit_events                                        system_audit_events[]
+  test_results_test_results_entered_byTousers                test_results[]           @relation("test_results_entered_byTousers")
+  test_results_test_results_updated_byTousers                test_results[]           @relation("test_results_updated_byTousers")
+}
+
+enum order_status {
+  PENDING
+  COMPLETED
+  AUTHORIZED
+}
+
+enum result_kind {
+  NUMERIC
+  TEXT
+  POS_NEG
+  SELECT
+}
+
+enum user_role {
+  ADMIN
+  TECHNICIAN
+  AUTHORIZER
+  DOCTOR
+  IT
+  CATALOGUE_MANAGER
+}
+
+model departments {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name String @db.VarChar(80)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user_departments user_departments[]
+}
+
+model user_departments {
+  user_id String @db.Uuid
+  department_id String @db.Uuid
+  users users @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+  departments departments @relation(fields: [department_id], references: [id], onUpdate: NoAction)
+  @@id([user_id, department_id])
+}
+
+model clinical_notes {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id String @db.Uuid
+  author_id String @db.Uuid
+  author_name String @db.VarChar(120)
+  author_designation String? @db.VarChar(120)
+  body String @db.VarChar(5000)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  lab_orders lab_orders @relation(fields: [order_id], references: [id], onUpdate: NoAction)
+  users users @relation(fields: [author_id], references: [id], onUpdate: NoAction)
+  @@index([order_id, created_at, id], map: "clinical_notes_order_idx")
+}

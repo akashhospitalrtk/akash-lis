@@ -1,0 +1,54 @@
+import { useState } from 'react';
+import { api } from '../api';
+import { defaultReportTemplate, type ReportTemplate, type ReportTemplateRecord } from '../reportTemplate';
+import type { Hospital, Order, User } from '../types';
+import { Report } from './Report';
+
+const previewOrder: Order = {
+  id: 'design-preview', accession_no: 'PREVIEW-0001', patient_name: 'SAMPLE PATIENT', patient_source: 'MANUAL',
+  uhid: 'SAMPLE-UHID', age_value: 30, age_unit: 'years', gender: 'Female', mobile: 'Not supplied',
+  referring_doctor: 'Sample referring doctor', patient_type: 'OPD', status: 'AUTHORIZED', sample_status: 'APPROVED',
+  sample_date: '2026-09-29T04:30:00Z', created_at: '2026-09-29T04:30:00Z', authorized_at: '2026-09-29T06:00:00Z',
+  authorized_by_name: 'Authorized signatory', authorized_by_designation: 'Designation', clinical_notes: [],
+  tests: [{ id: 'sample', profile_id: 'sample', profile_code: 'PREVIEW', profile_name: 'INVESTIGATION NAME — DESIGN PREVIEW', status: 'AUTHORIZED', sort_order: 0,
+    results: ['Parameter name', 'Another parameter', 'Additional parameter'].map((name, index) => ({ id: `sample-${index}`, order_test_id: 'sample', parameter_code: 'PREVIEW', parameter_name: name,
+      result_kind: 'TEXT', result_value: 'Example', method: 'Method appears here when recorded', unit: '—', reference_ranges: [], select_options: [], common_values: [], sort_order: index })) }]
+};
+export function ReportDesign({ record, hospital, user, onSaved }: { record: ReportTemplateRecord; hospital: Hospital; user: User; onSaved: (record: ReportTemplateRecord) => void }) {
+  const [draft, setDraft] = useState<ReportTemplate>(record.template);
+  const [revision, setRevision] = useState(record.revision);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  function update<K extends keyof ReportTemplate>(key: K, value: ReportTemplate[K]) { setDraft(old => ({ ...old, [key]: value })); setMessage(''); }
+  async function save() {
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const saved = await api<ReportTemplateRecord>('/report-template', { method: 'PUT', body: JSON.stringify({ template: draft, expectedRevision: revision }) });
+      setDraft(saved.template); setRevision(saved.revision); onSaved(saved); setMessage('Design saved. New printouts and PDF downloads use this design.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save design.'); }
+    finally { setBusy(false); }
+  }
+  type TextKey = { [K in keyof ReportTemplate]: ReportTemplate[K] extends string ? K : never }[keyof ReportTemplate];
+  const textFields = (fields: [TextKey, string, number][]) => fields.map(([key, label, max]) => <label key={key}>{label}<input value={String(draft[key])} maxLength={max} onChange={e => update(key, e.target.value as ReportTemplate[typeof key])} /></label>);
+  const numberFields = (fields: ReadonlyArray<readonly [keyof ReportTemplate, string, number, number, number]>) => fields.map(([key, label, min, max, step]) => <label key={key}>{label}<input type="number" required min={min} max={max} step={step} value={Number(draft[key])} onChange={e => update(key, Number(e.target.value) as never)} /></label>);
+  const colorFields = (fields: ReadonlyArray<readonly [TextKey, string]>) => fields.map(([key, label]) => <label key={key}>{label}<input type="color" aria-label={label} value={String(draft[key])} onChange={e => update(key, e.target.value as ReportTemplate[typeof key])} /><small>{String(draft[key])}</small></label>);
+  const alignment = (key: 'headerAlignment' | 'footerAlignment' | 'headerContactAlignment' | 'footerContactAlignment', label: string) => <label>{label}<select aria-label={label} value={draft[key]} onChange={e => update(key, e.target.value as 'left' | 'center' | 'right')}><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></label>;
+  return <section className="page report-design-page">
+    <div className="page-heading"><div><p className="eyebrow">Administration</p><h1>Report design</h1><p className="muted">Edit the letterhead and patient information format. The preview contains sample data only.</p></div></div>
+    <div className="report-design-layout"><form className="report-design-form" onSubmit={e => { e.preventDefault(); void save(); }}>
+      <div className="report-design-toolbar"><button disabled={busy}>Save design</button><button type="button" className="secondary" disabled={busy} onClick={() => { setDraft(defaultReportTemplate); setMessage('Default design loaded into preview. Save to apply.'); }}>Preview defaults</button></div>
+      {error && <p className="form-error" role="alert">{error}</p>}{message && <p className="success-message" role="status">{message}</p>}
+      <fieldset><legend>Header</legend>{textFields([['brandName', 'Brand name', 24], ['subtitle', 'Subtitle', 40], ['phone', 'Phone / helpline', 30], ['locationLine', 'Location line', 45]])}<label>Address<textarea maxLength={160} value={draft.address} onChange={e => update('address', e.target.value)} /></label></fieldset>
+      <fieldset><legend>Header appearance</legend>{colorFields([['bandColor', 'Header background colour'], ['bandTextColor', 'Header text colour']])}{alignment('headerAlignment', 'Header text alignment')}{numberFields([['brandFontPt', 'Brand font size (pt)', 24, 80, .5], ['subtitleFontPt', 'Subtitle font size (pt)', 10, 30, .5], ['contactFontPt', 'Contact font size (pt)', 8, 18, .5], ['headerHeightMm', 'Header height (mm)', 32, 45, 1]])}</fieldset>
+      <fieldset><legend>Footer appearance</legend>{colorFields([['footerBandColor', 'Footer background colour'], ['footerBandTextColor', 'Footer band text colour'], ['footerTextColor', 'Footer services text colour'], ['helplineColor', 'Helpline colour']])}{alignment('footerAlignment', 'Footer text alignment')}{numberFields([['footerFontPt', 'Footer services font size (pt)', 6, 12, .1], ['disclaimerFontPt', 'Footer statements font size (pt)', 6, 11, .1], ['helplineFontPt', 'Helpline font size (pt)', 8, 18, .5], ['footerHeightMm', 'Footer height (mm)', 32, 45, 1]])}</fieldset>
+      <fieldset><legend>Report body</legend>{numberFields([['bodyFontPt', 'Report text size (pt)', 8, 11, .5], ['watermarkOpacity', 'Watermark opacity (0 hides it)', 0, .12, .005]])}<p className="hint">Long header/footer text automatically reduces in size to fit. Increase the header/footer height if you need more space.</p></fieldset>
+      <fieldset><legend>Left / right groups</legend><p className="hint">Heading and service descriptions stay in the left group; phone, address and hospital details stay in the right group. Header/footer text alignment above controls the left group and footer statements only.</p>{alignment('headerContactAlignment', 'Header right-side details alignment')}{alignment('footerContactAlignment', 'Footer helpline alignment')}{numberFields([['headerGapMm', 'Header space between groups (mm)', 3, 12, .5], ['footerGapMm', 'Footer space between groups (mm)', 3, 12, .5]])}<button type="button" className="secondary" onClick={() => { setDraft(old => ({ ...old, headerAlignment: 'left', footerAlignment: 'left', headerContactAlignment: 'right', footerContactAlignment: 'right', headerGapMm: 6, footerGapMm: 4 })); setMessage('Left / right layout loaded into preview. Save to apply.'); }}>Align left / right groups</button></fieldset>
+      <fieldset><legend>Patient information</legend><label>Patient block format<select value={draft.patientLayout} onChange={e => update('patientLayout', e.target.value as ReportTemplate['patientLayout'])}><option value="three-column">Three sections — reference image</option><option value="bordered">Two columns with border</option><option value="minimal">Two columns without border</option></select></label><label>Patient field labels<select value={draft.patientLabelWeight} onChange={e => update('patientLabelWeight', e.target.value as ReportTemplate['patientLabelWeight'])}><option value="bold">Bold labels</option><option value="normal">Regular labels</option></select></label><label>Patient detail values<select value={draft.patientValueWeight} onChange={e => update('patientValueWeight', e.target.value as ReportTemplate['patientValueWeight'])}><option value="normal">Regular values</option><option value="bold">Bold values</option></select></label><label>Date format<select value={draft.dateStyle} onChange={e => update('dateStyle', e.target.value as ReportTemplate['dateStyle'])}><option value="date-time">Date and time (IST)</option><option value="date">Date only</option></select></label><label>Include sample collection / receipt fields<input type="checkbox" checked={draft.showSampleDates} onChange={e => update('showSampleDates', e.target.checked)} /></label>
+        {Object.entries(draft.labels).map(([key, value]) => <label key={key}>{defaultReportTemplate.labels[key as keyof ReportTemplate['labels']]} label<input required maxLength={24} value={value} onChange={e => update('labels', { ...draft.labels, [key]: e.target.value })} /></label>)}
+      </fieldset>
+      <fieldset><legend>Footer</legend>{textFields([['supportLine', 'Result-query message', 100], ['servicesLine', 'Available investigations', 180], ['facilitiesLine', 'Facilities', 120]])}{draft.disclaimerLines.map((line, index) => <label key={index}>Footer statement {index + 1}<textarea maxLength={180} value={line} onChange={e => update('disclaimerLines', draft.disclaimerLines.map((old, i) => i === index ? e.target.value : old))} /></label>)}<label>Show girl-child education emblem<input type="checkbox" checked={draft.showBadge} onChange={e => update('showBadge', e.target.checked)} /></label></fieldset>
+      <p className="hint">Changes apply to future renders of reports. PDFs already downloaded keep their previous design. Patient details and laboratory results are edited in their respective workflows.</p>
+    </form><div className="report-design-canvas"><Report order={previewOrder} hospital={hospital} user={user} template={draft} designPreview onUpdated={() => undefined} onBack={() => undefined} /></div></div>
+  </section>;
+}
