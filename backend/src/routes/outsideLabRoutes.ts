@@ -15,6 +15,26 @@ async function checkOrder(id: string, client: DbClient = pool) {
   if (!rows.length) throw AppError.notFound('Order not found.');
 }
 export const outsideLabRoutes = Router();
+outsideLabRoutes.get('/outside-lab/reports', authenticate, allowRoles('ADMIN', 'TECHNICIAN', 'AUTHORIZER'), asyncHandler(async (req, res) => {
+  const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 160) : '';
+  const pattern = `%${query}%`;
+  const { rows } = await pool.query(
+    `SELECT r.id, r.order_id, r.filename, r.mime_type, octet_length(r.content)::int AS size, r.created_at,
+       o.accession_no, o.uhid, o.patient_name, o.mobile, f.lab_name, f.reference
+     FROM outside_lab_reports r
+     JOIN outside_lab_referrals f ON f.order_id = r.order_id
+     JOIN lab_orders o ON o.id = r.order_id
+     WHERE o.deleted_at IS NULL
+       AND ($1 = '' OR o.patient_name ILIKE $2 OR COALESCE(o.uhid, '') ILIKE $2
+         OR o.accession_no ILIKE $2 OR o.mobile ILIKE $2 OR f.lab_name ILIKE $2
+         OR f.reference ILIKE $2 OR r.filename ILIKE $2)
+     ORDER BY r.created_at DESC
+     LIMIT 200`,
+    [query, pattern]
+  );
+  ApiResponse.ok({ reports: rows }).send(res);
+}));
+
 outsideLabRoutes.use('/orders/:id/outside-lab', authenticate, allowRoles('ADMIN', 'TECHNICIAN', 'AUTHORIZER'), validateParams(idParamsSchema));
 outsideLabRoutes.get('/orders/:id/outside-lab', asyncHandler(async (req, res) => {
   await checkOrder(req.params.id);

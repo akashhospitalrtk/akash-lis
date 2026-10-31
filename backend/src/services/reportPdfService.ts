@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { matchingRange } from './resultService.js';
+import { referenceText } from './resultService.js';
 import { defaultReportTemplate, reportTemplateSchema, type ReportTemplate } from '../schemas/reportTemplateSchema.js';
 import type { getOrderDetails } from './orderService.js';
 
@@ -15,18 +15,37 @@ function assetFile(name: string) {
   return typeof file === 'string' ? file : fileURLToPath(file);
 }
 
-export async function makeReportPdf(report: ReportData, input: ReportTemplate = defaultReportTemplate): Promise<Buffer> {
+export async function makeReportPdf(report: ReportData, input: ReportTemplate = defaultReportTemplate, colorMode: 'color' | 'bw' = 'color'): Promise<Buffer> {
   const t = reportTemplateSchema.parse(input);
   const mm = 72 / 25.4, width = 595.28, height = 841.89, left = 44, contentWidth = width - left * 2;
   const headerHeight = t.headerHeightMm * mm, footerHeight = t.footerHeightMm * mm;
-  const bodyTop = headerHeight + 17, signatureTop = height - footerHeight - 88;
-  const bodyBottom = signatureTop - 12;
+  const bodyTop = headerHeight + 17;
+  // Reserve only a small safety gap above the repeated footer; no signatory block is printed.
+  const bodyBottom = height - footerHeight - 22;
+  const monochrome = colorMode === 'bw';
+  function grayscaleColor(value: string) {
+    const match = /^#?([0-9a-f]{6})$/i.exec(value);
+    if (!match) return value;
+    const hex = match[1];
+    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    const gray = Math.round(.299 * r + .587 * g + .114 * b).toString(16).padStart(2, '0');
+    return `#${gray}${gray}${gray}`;
+  }
   const doc = new PDFDocument({ size: 'A4', margins: { top: bodyTop, bottom: height - bodyBottom, left, right: left }, bufferPages: true,
-    info: { Title: `Laboratory report ${report.accession_no}`, Author: `${t.brandName} ${t.subtitle}` } });
+    info: { Title: `Laboratory report ${report.accession_no}${monochrome ? ' (Black and White)' : ''}`, Author: `${t.brandName} ${t.subtitle}` } });
+  if (monochrome) {
+    const nativeFillColor = doc.fillColor.bind(doc);
+    const nativeStrokeColor = doc.strokeColor.bind(doc);
+    const nativeFill = doc.fill.bind(doc);
+    Object.defineProperty(doc, 'fillColor', { configurable: true, value: (color: string) => nativeFillColor(grayscaleColor(color)) });
+    Object.defineProperty(doc, 'strokeColor', { configurable: true, value: (color: string) => nativeStrokeColor(grayscaleColor(color)) });
+    Object.defineProperty(doc, 'fill', { configurable: true, value: (color?: string) => nativeFill(color ? grayscaleColor(color) : color) });
+  }
   doc.registerFont('Body', assetFile('fonts/NotoSans.ttf'));
   doc.registerFont('BodyBold', assetFile('fonts/Inter-Bold.woff'));
   doc.registerFont('Hindi', assetFile('fonts/NotoSansDevanagari.ttf'));
-  const emblem = assetFile('letterhead/emblem.png'), badge = assetFile('letterhead/beti-bachao.png');
+  const emblem = assetFile(monochrome ? 'letterhead/emblem-bw.png' : 'letterhead/emblem.png');
+  const badge = assetFile(monochrome ? 'letterhead/beti-bachao-bw.png' : 'letterhead/beti-bachao.png');
   const chunks: Buffer[] = [];
   const finished = new Promise<Buffer>((resolve, reject) => {
     doc.on('data', (chunk: Buffer) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject);
@@ -85,7 +104,7 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
   }
   function drawLetterhead() {
     doc.save();
-    doc.rect(0, 0, width, headerHeight).fill(t.bandColor);
+    doc.rect(0, 0, width, headerHeight).fill(monochrome ? grayscaleColor(t.bandColor) : t.bandColor);
     doc.image(emblem, left, 25, { fit: [32, 42] });
     // Shared left edge and explicit single-line brand boxes avoid metric-driven
     // wrapping/shrinking that made the printed header unlike the screen guide.
@@ -114,25 +133,26 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
     fitted(t.facilitiesLine, left, footerTop + servicesHeight * .74, copyWidth, servicesHeight * .25, t.footerFontPt, t.footerTextColor, t.footerAlignment);
     fitted(`Helpline No.\n${t.phone}`, callX, footerTop + servicesHeight * .45, 87, servicesHeight * .52, t.helplineFontPt, t.helplineColor, t.footerContactAlignment);
     if (t.showBadge) doc.image(badge, width - left - 45, footerTop + 4, { fit: [45, servicesHeight - 6] });
-    doc.rect(0, height - bandHeight, width, bandHeight).fill(t.footerBandColor);
+    doc.rect(0, height - bandHeight, width, bandHeight).fill(monochrome ? grayscaleColor(t.footerBandColor) : t.footerBandColor);
     fitted(t.disclaimerLines.filter(Boolean).map(line => `• ${line}`).join('\n'), left, height - bandHeight + 4, contentWidth, bandHeight - 7, t.disclaimerFontPt, t.footerBandTextColor, t.footerAlignment);
     doc.restore(); doc.x = left; doc.y = bodyTop;
   }
   let activeTest: string | null = null;
-  const tableColumns = [left + 5, left + contentWidth * .48, left + contentWidth * .64, left + contentWidth * .77];
-  const tableWidths = [.48, .16, .13, .23].map(fraction => contentWidth * fraction - 10);
+  // Give the reference-range column enough width for gender-specific ranges to stay on two compact lines.
+  const tableColumns = [left + 5, left + contentWidth * .39, left + contentWidth * .54, left + contentWidth * .66];
+  const tableWidths = [.39, .15, .12, .34].map(fraction => contentWidth * fraction - 10);
   function tableHeader(title?: string) {
     if (title) { at(`${title} (continued)`, left, doc.y, contentWidth, t.bodyFontPt + 1); doc.moveDown(.3); }
     const y = doc.y;
-    doc.rect(left, y, contentWidth, 24).fill('#edf3f7');
+    doc.rect(left, y, contentWidth, 18).fill(monochrome ? grayscaleColor('#edf3f7') : '#edf3f7');
     ['Test name', 'Result', 'Unit', 'Reference range'].forEach((label, i) => {
       doc.font('BodyBold').fontSize(t.bodyFontPt - .5).fillColor('#214e70');
       const offset = i === 1 ? tableWidths[i] - doc.widthOfString(label) : i === 2 ? (tableWidths[i] - doc.widthOfString(label)) / 2 : 0;
       doc.text(label, tableColumns[i] + offset, y + 7, { lineBreak: false });
     });
     doc.strokeColor('#c7d5df').lineWidth(.5).moveTo(left, y).lineTo(width - left, y).stroke();
-    doc.moveTo(left, y + 24).lineTo(width - left, y + 24).stroke();
-    doc.x = left; doc.y = y + 31;
+    doc.moveTo(left, y + 18).lineTo(width - left, y + 18).stroke();
+    doc.x = left; doc.y = y + 23;
   }
   doc.on('pageAdded', () => { drawLetterhead(); if (activeTest) tableHeader(activeTest); });
   drawLetterhead();
@@ -188,36 +208,35 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
   doc.strokeColor('#aeb0c3').lineWidth(.5);
   if (t.patientLayout === 'bordered') doc.rect(left - 5, patientTop - 4, contentWidth + 10, doc.y - patientTop + 8).stroke();
   else doc.moveTo(left, doc.y + 3).lineTo(width - left, doc.y + 3).stroke();
-  doc.x = left; doc.y += 12;
+  doc.x = left; doc.y += 7;
 
   for (const test of report.tests) {
     // Measure whole parameter blocks, including all explanatory text. Keep a
     // panel intact when it fits on one fresh page; larger panels break at rows.
     const rows = test.results.map(result => {
-      const range = matchingRange(result.reference_ranges, report);
-      const reference = range ? range.low != null || range.high != null ? `${range.low ?? '-'} – ${range.high ?? '-'}` : range.label || '-' : '-';
+      const reference = referenceText(result.reference_ranges, report);
       const values = [result.parameter_name, `${result.result_value || '-'}${result.abnormal_flag ? `  ${result.abnormal_flag}` : ''}`, result.unit || '-', reference];
       const notes: [string, number][] = [];
       if (result.method) notes.push([`Method: ${result.method}`, t.bodyFontPt - 1.5]);
       if (result.reference_note) notes.push([result.reference_note, t.bodyFontPt - 1]);
       if (result.comments) notes.push([`Comment: ${result.comments}`, t.bodyFontPt - 1]);
       if (result.description) notes.push([result.description, t.bodyFontPt - 1]);
-      const needed = Math.max(...values.map((value, i) => measure(value, t.bodyFontPt, tableWidths[i]))) + 12
+      const needed = Math.max(...values.map((value, i) => measure(value, t.bodyFontPt, tableWidths[i]))) + 5
         + notes.reduce((sum, [value, size]) => sum + measure(value, size), 0);
       return { result, values, needed };
     });
     const extra = (test.description ? measure(`Test information: ${test.description}`, t.bodyFontPt - 1) : 0)
       + (test.remarks ? measure(`Remarks: ${test.remarks}`, t.bodyFontPt - 1) : 0);
-    const panelHeight = 16 + measure(test.profile_name, t.bodyFontPt + 2) + 31 + rows.reduce((sum, row) => sum + row.needed, 0) + extra;
-    const startHeight = 16 + measure(test.profile_name, t.bodyFontPt + 2) + 31 + (rows[0]?.needed || 0);
+    const panelHeight = 8 + measure(test.profile_name, t.bodyFontPt + 2) + 23 + rows.reduce((sum, row) => sum + row.needed, 0) + extra;
+    const startHeight = 8 + measure(test.profile_name, t.bodyFontPt + 2) + 23 + (rows[0]?.needed || 0);
     space(panelHeight <= bodyBottom - bodyTop ? panelHeight : startHeight <= bodyBottom - bodyTop ? startHeight : 65);
-    doc.y += 8;
-    at(test.profile_name, left, doc.y, contentWidth, t.bodyFontPt + 2, '#214e70'); doc.y += 8;
+    doc.y += 4;
+    at(test.profile_name, left, doc.y, contentWidth, t.bodyFontPt + 2, '#214e70'); doc.y += 4;
     activeTest = test.profile_name; tableHeader();
     for (const { result, values, needed } of rows) {
       const cells: [string, number, number][] = values.map((value, i) => [value, tableColumns[i], tableWidths[i]]);
       doc.font('Body').fontSize(t.bodyFontPt);
-      const rowHeight = Math.max(...cells.map(([value, , w]) => doc.heightOfString(value, { width: w, lineGap: 2 }))) + 6;
+      const rowHeight = Math.max(...cells.map(([value, , w]) => doc.heightOfString(value, { width: w, lineGap: 2 }))) + 3;
       const freshRowSpace = bodyBottom - bodyTop - measure(`${test.profile_name} (continued)`, t.bodyFontPt + 1) - 40;
       space(needed <= freshRowSpace ? needed : rowHeight + (result.method ? 18 : 0));
       const y = doc.y;
@@ -227,8 +246,8 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
       if (result.reference_note) text(result.reference_note, t.bodyFontPt - 1);
       if (result.comments) text(`Comment: ${result.comments}`, t.bodyFontPt - 1);
       if (result.description) text(result.description, t.bodyFontPt - 1);
-      if (doc.y + 7 <= bodyBottom) doc.strokeColor('#d9dde5').lineWidth(.35).moveTo(left, doc.y + 3).lineTo(width - left, doc.y + 3).stroke();
-      doc.x = left; doc.y += 10;
+      if (doc.y + 5 <= bodyBottom) doc.strokeColor('#d9dde5').lineWidth(.35).moveTo(left, doc.y + 2).lineTo(width - left, doc.y + 2).stroke();
+      doc.x = left; doc.y += 4;
     }
     if (test.description) text(`Test information: ${test.description}`, t.bodyFontPt - 1);
     if (test.remarks) text(`Remarks: ${test.remarks}`, t.bodyFontPt - 1);
@@ -249,13 +268,6 @@ export async function makeReportPdf(report: ReportData, input: ReportTemplate = 
     // Page numbering is in the reserved footer gap, outside normal body flow.
     const savedBottom = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
-    const signX = width - left - 230;
-    if (report.authorized_at) {
-      fitted(report.authorized_signature_label || 'Digitally authorised', signX, signatureTop, 230, 16, 9, '#252531', 'right');
-      fitted(report.authorized_by_name || 'Authorized signatory', signX, signatureTop + 17, 230, 18, t.bodyFontPt + 1, '#252531', 'right');
-      if (report.authorized_by_designation) fitted(report.authorized_by_designation, signX, signatureTop + 36, 230, 14, 8, '#616172', 'right');
-      fitted(`Authorized: ${date(report.authorized_at)}`, signX, signatureTop + 51, 230, 14, 8, '#616172', 'right');
-    }
     doc.font('Body').fontSize(7).fillColor('#616172').text(`${report.accession_no} · Page ${i + 1} of ${pages.count}`, left, height - footerHeight - 14, { width: contentWidth, height: 12, lineBreak: false });
     doc.page.margins.bottom = savedBottom;
   }

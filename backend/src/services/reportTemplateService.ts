@@ -7,16 +7,19 @@ import { defaultReportTemplate, reportTemplateSchema, saveReportTemplateSchema }
 import type { SessionUser } from '../schemas/authSchemas.js';
 
 export function initialReportTemplate() {
-  return { ...defaultReportTemplate, phone: config.hospital.phone || defaultReportTemplate.phone,
+  return { ...defaultReportTemplate, showDigitalSignature: false,
+    phone: config.hospital.phone || defaultReportTemplate.phone,
     address: config.hospital.address || defaultReportTemplate.address };
 }
 export async function getReportTemplate() {
   const { rows } = await pool.query('SELECT template, revision FROM report_template WHERE id = 1');
-  return { template: reportTemplateSchema.parse({ ...initialReportTemplate(), ...rows[0]?.template }), revision: rows[0]?.revision || 0 };
+  return { template: reportTemplateSchema.parse({ ...initialReportTemplate(), ...rows[0]?.template, showDigitalSignature: false }), revision: rows[0]?.revision || 0 };
 }
 export async function saveReportTemplate(input: unknown, user: SessionUser) {
   if (!hasRole(user, 'ADMIN')) throw AppError.forbidden('Only an administrator can change the report design.');
-  const { template, expectedRevision } = saveReportTemplateSchema.parse(input);
+  const parsed = saveReportTemplateSchema.parse(input);
+  const template = reportTemplateSchema.parse({ ...parsed.template, showDigitalSignature: false });
+  const { expectedRevision } = parsed;
   return withTransaction(async client => {
     const { rows } = await client.query('SELECT template, revision FROM report_template WHERE id = 1 FOR UPDATE');
     if (!rows[0]) throw new AppError('Report design storage is not ready. Run the database migration.', 503);

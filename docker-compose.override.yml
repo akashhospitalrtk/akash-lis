@@ -1,0 +1,3 @@
+services:
+  frontend:
+    image: akash-lis-frontend:1.1.0-simplified

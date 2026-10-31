@@ -91,11 +91,8 @@ test('letterhead repeats on every page and long results and notes stay inside re
       assert.ok(text.includes('Inside Akash Hospital'), `page ${p} location`);
       assert.ok(text.includes('Helpline No.'), `page ${p} footer`);
       assert.ok(text.includes(`Page ${p} of ${pdf.numPages}`));
-      const signature = items.find(item => item.str === 'Authorized signatory');
-      assert.ok(signature, `page ${p}: signatory repeated`);
-      assert.ok(Math.abs(signature.transform[4] + signature.width - (595.28 - 44)) < 1, 'signature right aligned');
-      assert.ok(items.some(item => item.str === 'Digitally authorised'));
-      const positions = ['AKASH', 'Inside Akash Hospital', 'Helpline No.', 'Authorized signatory'].map(label => {
+      assert.ok(!items.some(item => /Authorized signatory|Digitally authorised/.test(item.str)), `page ${p}: no authorization signature is printed`);
+      const positions = ['AKASH', 'Inside Akash Hospital', 'Helpline No.'].map(label => {
         const item = items.find(item => item.str === label);
         assert.ok(item, label);
         return item.transform.slice(4, 6);
@@ -104,7 +101,7 @@ test('letterhead repeats on every page and long results and notes stay inside re
       assert.deepEqual(positions, fixedPositions, `page ${p}: letterhead stays fixed`);
       for (const item of items.filter(i => /Measurement-\d+/.test(i.str) || i.str.includes('Clinical note text.') || i.str.includes('Long explanatory text.'))) {
         const y = 841.89 - item.transform[5];
-        assert.ok(y > defaultReportTemplate.headerHeightMm * 72 / 25.4 && y < 841.89 - defaultReportTemplate.footerHeightMm * 72 / 25.4 - 90, `page ${p}: content stays above signature y=${y}`);
+        assert.ok(y > defaultReportTemplate.headerHeightMm * 72 / 25.4 && y < 841.89 - defaultReportTemplate.footerHeightMm * 72 / 25.4 - 22, `page ${p}: content stays above signature y=${y}`);
       }
     }
     assert.ok(all.includes('Measurement-64'));
@@ -141,6 +138,31 @@ test('amendment history stays off the patient PDF and multiple panels retain res
     for (let panel = 0; panel < 12; panel++) {
       for (let row = 0; row < 8; row++) assert.ok(all.includes(`Analyte ${panel}-${row}`));
     }
+  } finally { await task.destroy(); }
+});
+
+test('reference ranges print on separate lines and digital signature label is hidden', async () => {
+  const rangedReport = {
+    ...report,
+    tests: [{ profile_name: 'Synthetic CBC', results: [{
+      parameter_name: 'Haemoglobin', result_value: '14', unit: 'g/dL', method: null,
+      reference_ranges: [
+        { label: 'Adult male', gender: 'Male', low: 13, high: 17 },
+        { label: 'Adult female', gender: 'Female', low: 12, high: 15 }
+      ]
+    }] }]
+  };
+  const bytes = await makeReportPdf(rangedReport);
+  const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
+  try {
+    const pdf = await task.promise;
+    const { items } = await (await pdf.getPage(1)).getTextContent();
+    const male = items.find(item => item.str.includes('Adult male:'));
+    const female = items.find(item => item.str.includes('Adult female:'));
+    assert.ok(male, 'male range is present');
+    assert.ok(female, 'female range is present');
+    assert.ok(male.transform[5] > female.transform[5], 'female range appears on the next line');
+    assert.ok(!items.some(item => item.str === 'Digitally authorised'), 'digital signature text is not printed');
   } finally { await task.destroy(); }
 });
 

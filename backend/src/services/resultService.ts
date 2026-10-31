@@ -3,20 +3,30 @@ import type { ReferenceRange, PatientAge, ResultRow } from '../types/database.js
 type MeasuredValue = string | number | null | undefined;
 type FlagMetadata = Pick<ResultRow, 'result_kind' | 'reference_ranges' | 'critical_low' | 'critical_high'>;
 import { AppError } from '../core/AppError.js';
+function normalizedGender(value?: string | null) {
+  const gender = value?.trim().toLowerCase() || '';
+  if (gender === 'm' || gender === 'male') return 'male';
+  if (gender === 'f' || gender === 'female') return 'female';
+  if (gender === 'o' || gender === 'other') return 'other';
+  return gender === 'any' ? '' : gender;
+}
+
 export function matchingRange(ranges: ReferenceRange[] = [], patient: PatientAge) {
   const factors = { days: 1, weeks: 7, months: 365.25 / 12, years: 365.25 };
   const rawAge = patient.age_value ?? patient.age_years;
   const unit = patient.age_value != null ? patient.age_unit || 'years' : 'years';
   const age = Number(rawAge) * factors[unit];
   const hasAge = rawAge !== null && rawAge !== undefined && Number.isFinite(age);
+  const patientGender = normalizedGender(patient.gender);
   const matches = ranges.filter((range: ReferenceRange) => {
     const factor = factors[range.ageUnit || 'years'];
-    const gender = !range.gender || range.gender.toLowerCase() === 'any' || range.gender.toLowerCase() === String(patient.gender || '').toLowerCase();
-    return gender && (range.ageMin == null || (hasAge && age + 1e-8 >= Number(range.ageMin) * factor))
+    const rangeGender = normalizedGender(range.gender);
+    const genderMatches = !rangeGender || rangeGender === patientGender;
+    return genderMatches && (range.ageMin == null || (hasAge && age + 1e-8 >= Number(range.ageMin) * factor))
       && (range.ageMax == null || (hasAge && age - 1e-8 <= Number(range.ageMax) * factor));
   });
   return matches.sort((left, right) => {
-    const specificity = (range: ReferenceRange) => (range.gender && range.gender.toLowerCase() !== 'any' ? 2 : 0) + (range.ageMin != null ? 2 : 0) + (range.ageMax != null ? 2 : 0);
+    const specificity = (range: ReferenceRange) => (normalizedGender(range.gender) ? 2 : 0) + (range.ageMin != null ? 2 : 0) + (range.ageMax != null ? 2 : 0);
     const span = (range: ReferenceRange) => range.ageMin != null && range.ageMax != null ? (range.ageMax - range.ageMin) * factors[range.ageUnit || 'years'] : Infinity;
     return specificity(right) - specificity(left) || span(left) - span(right);
   })[0];
@@ -113,9 +123,23 @@ export async function refreshOrderStatus(client: DbClient, orderId: string) {
   );
 }
 
-export function referenceText(ranges: ReferenceRange[], patient: PatientAge) {
-  const range = matchingRange(ranges, patient);
-  if (!range) return '—';
-  if (range.low !== undefined || range.high !== undefined) return `${range.low ?? '—'} – ${range.high ?? '—'}`;
-  return range.label || '—';
+function referenceAgeScope(range: ReferenceRange) {
+  if (range.ageMin == null && range.ageMax == null) return '';
+  const unit = range.ageUnit || 'years';
+  if (range.ageMin != null && range.ageMax != null) return `${range.ageMin}–${range.ageMax} ${unit}`;
+  if (range.ageMin != null) return `${range.ageMin}+ ${unit}`;
+  return `0–${range.ageMax} ${unit}`;
+}
+
+export function referenceText(ranges: ReferenceRange[] = [], _patient: PatientAge) {
+  if (!ranges.length) return '—';
+  return ranges.map((range) => {
+    const configuredLabel = range.label?.trim();
+    const genderLabel = normalizedGender(range.gender).replace(/^./, (letter) => letter.toUpperCase());
+    const ageScope = referenceAgeScope(range);
+    const label = configuredLabel || [genderLabel, ageScope].filter(Boolean).join(', ');
+    const limits = range.low !== undefined || range.high !== undefined ? `${range.low ?? '—'} – ${range.high ?? '—'}` : '';
+    if (label && limits) return `${label}: ${limits}`;
+    return label || limits || '—';
+  }).join('\n');
 }

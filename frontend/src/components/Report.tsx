@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api, download, fetchDocument } from '../api';
 import { DoctorNotes } from './DoctorNotes';
 import { formatAge, isDetailOrder, referenceText, hasRole } from '../lib';
@@ -16,9 +16,6 @@ export function Report({ order, hospital, user, onUpdated, onBack, template = de
   const [busy, setBusy] = useState(false);
   const [showAmendment, setShowAmendment] = useState(false);
   const [amendmentReason, setAmendmentReason] = useState('');
-  const [pdfUrl, setPdfUrl] = useState('');
-  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
-  useEffect(() => { setPdfUrl(''); }, [order?.id, order?.status, order?.amendment_count, template]);
   const detailed = isDetailOrder(order) ? order : null;
   if (!detailed) return <section className="page empty-state"><h1>No report selected</h1><p>Open an order from the worklist first.</p></section>;
 
@@ -38,30 +35,30 @@ export function Report({ order, hospital, user, onUpdated, onBack, template = de
 
   async function print() {
     if (!canPrint || !detailed) return;
+    // Open a blank tab synchronously so Chrome does not block the authenticated PDF tab as a popup.
+    const printTab = window.open('about:blank', '_blank');
+    if (!printTab) {
+      setError('Allow pop-ups for this LIS site, then click Print report again.');
+      return;
+    }
+    printTab.document.title = `Laboratory report ${detailed.accession_no}`;
+    printTab.document.body.innerHTML = '<p style="font:14px Arial;padding:24px">Preparing report PDF…</p>';
     setBusy(true); setError('');
     try {
       const updated = await api<Order>(`/clinical/orders/${detailed.id}/print`, { method: 'POST' });
       onUpdated(updated);
-      await openPdfPreview();
+      const { blob } = await fetchDocument(`/clinical/orders/${detailed.id}/report.pdf`);
+      if (blob.type !== 'application/pdf') throw new Error('The server did not return a PDF report.');
+      const url = URL.createObjectURL(blob);
+      printTab.location.href = url;
+      // Keep the object URL alive while Chrome's built-in PDF viewer loads and prints it.
+      window.setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not record printing.');
+      printTab.close();
+      setError(reason instanceof Error ? reason.message : 'Could not open the report PDF.');
     } finally {
       setBusy(false);
     }
-  }
-
-  async function openPdfPreview() {
-    if (!canPrint || !detailed) return;
-    const { blob } = await fetchDocument(`/clinical/orders/${detailed.id}/report.pdf`);
-    if (blob.type !== 'application/pdf') throw new Error('The server did not return a PDF report.');
-    setPdfUrl(URL.createObjectURL(blob));
-  }
-
-  async function previewPdf() {
-    setBusy(true); setError('');
-    try { await openPdfPreview(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not preview PDF.'); }
-    finally { setBusy(false); }
   }
 
   async function downloadPdf() {
@@ -93,13 +90,12 @@ export function Report({ order, hospital, user, onUpdated, onBack, template = de
       {detailed.status === 'AUTHORIZED' && hasRole(user, 'ADMIN', 'AUTHORIZER') && <button className="secondary" disabled={busy} onClick={() => setShowAmendment(true)}>Amend &amp; edit values</button>}
       <span>{detailed.status === 'AUTHORIZED' ? amendmentNo ? `Authorized amended report - Revision ${amendmentNo}` : 'Authorized report' : amendmentNo ? `Amendment ${amendmentNo} is awaiting authorization.` : 'Preview only - authorization is required before printing.'}</span>
       {canDeliver && <button className="secondary" onClick={() => void deliver()} disabled={busy}>Mark delivered</button>}
-      {canPrint && <><button className="secondary" onClick={() => void previewPdf()} disabled={busy}>PDF / print preview</button><button className="secondary" onClick={() => void downloadPdf()} disabled={busy}>Download PDF</button><button onClick={() => void print()} disabled={busy}>Print report</button></>}
+      {canPrint && <><button className="secondary" onClick={() => void downloadPdf()} disabled={busy}>Download PDF</button><button onClick={() => void print()} disabled={busy}>{busy ? 'Opening PDF…' : 'Print report'}</button></>}
     </div>}
     {error && <p className="form-error">{error}</p>}
-    {pdfUrl && <section className="report-pdf-preview" aria-label="Exact PDF and print preview"><p>This is the same document layout used by Download PDF. Use the printer icon in this PDF viewer to print at A4 / Actual size (100%).</p><button type="button" className="secondary" onClick={() => setPdfUrl('')}>Close PDF preview</button><iframe title="Exact report PDF and print preview" src={pdfUrl} /><a href={pdfUrl} target="_blank" rel="noopener noreferrer">Open PDF in a new tab if the viewer is unavailable</a></section>}
 
     {showAmendment && <form className="amendment-panel" onSubmit={(event) => { event.preventDefault(); void amendAndEdit(); }}><h2>Amend report to edit values</h2><p>The authorized version is preserved. Corrected results must be saved and authorized again.</p><label className="field"><span>Amendment reason *</span><textarea required minLength={5} maxLength={500} value={amendmentReason} onChange={(event) => setAmendmentReason(event.target.value)} /></label><div className="toolbar-actions"><button type="button" className="secondary" disabled={busy} onClick={() => setShowAmendment(false)}>Cancel</button><button disabled={busy}>Begin amendment &amp; edit</button></div></form>}
-    <article hidden={Boolean(pdfUrl)} className={`report-sheet patient-layout-${template.patientLayout} patient-label-${template.patientLabelWeight} patient-value-${template.patientValueWeight}`}>
+    <article className={`report-sheet patient-layout-${template.patientLayout} patient-label-${template.patientLabelWeight} patient-value-${template.patientValueWeight}`}>
       <LetterheadHeader template={template} />
       <img className="letterhead-watermark" src="/letterhead/emblem.svg" alt="" />
       <div className="report-body">
@@ -160,7 +156,7 @@ export function Report({ order, hospital, user, onUpdated, onBack, template = de
                 <td><strong>{result.parameter_name}</strong>{result.method && <small className="report-method">Method: {result.method}</small>}</td>
                 <td><strong>{result.result_value || '-'}</strong>{result.abnormal_flag && <span className="report-flag report-flag-abnormal">{flag}</span>}</td>
                 <td>{result.unit || '-'}</td>
-                <td>{referenceText(result.reference_ranges, detailed)}{result.reference_note && <small className="report-reference-note">{result.reference_note}</small>}</td>
+                <td className="report-reference-range">{referenceText(result.reference_ranges, detailed)}{result.reference_note && <small className="report-reference-note">{result.reference_note}</small>}</td>
               </tr>{result.description && <tr className="report-description-row"><td colSpan={4}><div className="report-description">{result.description}</div></td></tr>}</Fragment>;
             })}</tbody>
           </table>
@@ -172,7 +168,6 @@ export function Report({ order, hospital, user, onUpdated, onBack, template = de
 
       <footer className="report-footer">
         <div className="report-support"><p>Report support</p><strong>{hospital.phone || 'Contact the laboratory'}</strong><span>For report queries, please quote the accession number.</span></div>
-        <div className="signature"><div className="signature-space">{detailed.authorized_signature_label || (detailed.status === 'AUTHORIZED' ? 'Digitally authorised' : '')}</div><div className="stamp-space" aria-label="Laboratory stamp area">LAB<br />STAMP</div><strong>{detailed.authorized_by_name || 'Authorised Signatory'}</strong>{detailed.authorized_by_designation && <span>{detailed.authorized_by_designation}</span>}</div>
       </footer>
       {Boolean(detailed.clinical_notes?.length) && <section className="report-doctor-notes"><h3>Doctor clinical notes</h3><p className="muted">Independently authored clinical notes. Laboratory authorization applies to laboratory results; notes may be added later.</p><DoctorNotes notes={detailed.clinical_notes || []} /></section>}
       <p className="report-tracking">{detailed.accession_no}{designPreview ? ' · DESIGN PREVIEW — NOT A PATIENT REPORT' : ''}</p>

@@ -19,7 +19,7 @@ export const reportTemplateSchema = z.object({
   patientLayout: z.enum(['three-column', 'bordered', 'minimal']),
   patientLabelWeight: z.enum(['normal', 'bold']).default('bold'), patientValueWeight: z.enum(['normal', 'bold']).default('normal'),
   dateStyle: z.enum(['date', 'date-time']),
-  showSampleDates: z.boolean(), showBadge: z.boolean(),
+  showSampleDates: z.boolean(), showDigitalSignature: z.boolean().default(false), showBadge: z.boolean(),
   supportLine: z.string().trim().max(100), servicesLine: z.string().trim().max(180), facilitiesLine: z.string().trim().max(120),
   disclaimerLines: z.array(z.string().trim().max(180)).length(3),
   labels: z.object({ name: label, ageGender: label, referringDoctor: label, mobile: label, patientType: label,

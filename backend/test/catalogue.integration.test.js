@@ -158,6 +158,7 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
     try {
       await page.addInitScript((value) => localStorage.setItem('lis_token', value), token);
       await page.goto(base); await page.getByRole('button', { name: 'Investigation catalogue' }).click();
+      await page.getByRole('textbox', { name: 'Search investigations', exact: true }).fill('Vitamin B12');
       await page.getByRole('button', { name: /Vitamin B12.*VITB12/ }).click();
       await page.locator('.parameter-summary[aria-expanded="false"]').first().click();
       const code = page.getByLabel('Parameter code *', { exact: true }); await code.fill(''); await code.pressSequentially('B12_NEW'); assert.equal(await code.inputValue(), 'B12_NEW');
@@ -165,7 +166,9 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
       await page.getByText('Optional codes, calculations and entry shortcuts', { exact: true }).click();
       await page.getByLabel('Common quick values').fill('100\n200\n300');
       await page.getByRole('button', { name: 'Save investigation', exact: true }).click(); await page.getByText('Investigation updated.', { exact: false }).waitFor();
-      await page.reload(); await page.getByRole('button', { name: 'Investigation catalogue' }).click(); await page.getByRole('button', { name: /Vitamin B12.*B12_PANEL/ }).click();
+      await page.reload(); await page.getByRole('button', { name: 'Investigation catalogue' }).click();
+      await page.getByRole('textbox', { name: 'Search investigations', exact: true }).fill('Vitamin B12');
+      await page.getByRole('button', { name: /Vitamin B12.*B12_PANEL/ }).click();
       await page.locator('.parameter-summary[aria-expanded="false"]').first().click();
       assert.equal(await page.getByLabel('Parameter code *', { exact: true }).inputValue(), 'B12_NEW');
       await page.getByText('Analyzer / report templates and setup guide', { exact: true }).click();
@@ -175,9 +178,23 @@ test('catalogue edits, seed persistence, clinical snapshots and browser form', a
       assert.equal(await page.getByLabel(/^Method/).first().inputValue(), 'Cyanide-free colorimetry');
       await page.getByRole('button', { name: 'Save investigation', exact: true }).click(); await page.getByText('Investigation updated.', { exact: false }).waitFor();
       const h360 = (await request('/profiles')).body.find((p) => p.code === 'CBC'); assert.equal(h360.parameters.length, 22); assert.ok(!h360.parameters.some((p) => ['NEUT', 'EOS', 'MONO', 'BASO'].includes(p.code)));
+      const simpleRangeInput = { code: 'BROWSER_RANGE', name: 'Browser Range Demo', department: 'Laboratory', parameters: [{ code: 'VALUE', name: 'Result value', resultKind: 'NUMERIC', referenceRanges: [], selectOptions: [], commonValues: [], sortOrder: 1, active: true }] };
+      const simpleRangeProfile = await request('/catalogue/profiles', 'POST', simpleRangeInput); assert.equal(simpleRangeProfile.status, 201);
+      await page.reload(); await page.getByRole('button', { name: 'Investigation catalogue' }).click();
+      await page.getByRole('textbox', { name: 'Search investigations', exact: true }).fill('Browser Range Demo');
+      await page.getByRole('button', { name: /Browser Range Demo.*BROWSER_RANGE/ }).click();
+      await page.locator('.parameter-summary[aria-expanded="false"]').first().click();
+      await page.getByLabel('Reference low limit').fill('1.5');
+      await page.getByLabel('Reference high limit').fill('8.5');
+      await page.getByRole('button', { name: 'Save investigation', exact: true }).click();
+      await page.getByText('Investigation updated.', { exact: false }).waitFor();
+      const rangeSaved = (await request('/catalogue/profiles')).body.find((profile) => profile.id === simpleRangeProfile.body.id);
+      assert.equal(rangeSaved.parameters[0].reference_ranges[0].low, 1.5);
+      assert.equal(rangeSaved.parameters[0].reference_ranges[0].high, 8.5);
       const browserDemoInput = { code: 'BROWSER_DELETE', name: 'Browser Delete Demo', department: 'Laboratory', parameters: [{ code: 'DEMO', name: 'Demo value', resultKind: 'TEXT', referenceRanges: [], selectOptions: [], commonValues: [], sortOrder: 1, active: true }] };
       const browserDemo = await request('/catalogue/profiles', 'POST', browserDemoInput); assert.equal(browserDemo.status, 201);
       await page.reload(); await page.getByRole('button', { name: 'Investigation catalogue' }).click();
+      await page.getByRole('textbox', { name: 'Search investigations', exact: true }).fill('Browser Delete Demo');
       await page.getByRole('button', { name: /Browser Delete Demo.*BROWSER_DELETE/ }).click();
       await page.getByText('Investigation actions and history', { exact: true }).click();
       await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();

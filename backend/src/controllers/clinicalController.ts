@@ -10,7 +10,8 @@ export const results = asyncHandler(async (req, res) => { ApiResponse.ok(await s
 export const printReport = asyncHandler(async (req, res) => { ApiResponse.ok(await service.publishedReport(req.params.id, requireUser(req), 'REPORT_PRINT_REQUESTED')).send(res); });
 export const addNote = asyncHandler<ClinicalNoteInput>(async (req, res) => { ApiResponse.created(await service.addClinicalNote(req.params.id, res.locals.input, requireUser(req))).send(res); });
 export const downloadReport = asyncHandler(async (req, res) => {
-  const report = await service.downloadReport(req.params.id, requireUser(req));
+  const colorMode = req.query.mode === 'bw' ? 'bw' : 'color';
+  const report = await service.downloadReport(req.params.id, requireUser(req), colorMode);
   res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${report.filename}"`, 'Cache-Control': 'private, no-store' });
   res.send(report.bytes);
 });

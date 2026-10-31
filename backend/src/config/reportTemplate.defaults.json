@@ -31,6 +31,7 @@
   "patientValueWeight": "normal",
   "dateStyle": "date-time",
   "showSampleDates": true,
+  "showDigitalSignature": false,
   "showBadge": false,
   "supportLine": "In Case of any unexpected Result kindly Contact the Lab",
   "servicesLine": "T3, T4, FSH, LH, PROLACTIN, β-HCG, PSA, CA-125, PROGESTERONE, HbA.C ( Reports on Same Day)",

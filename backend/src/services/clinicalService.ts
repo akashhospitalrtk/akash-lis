@@ -66,9 +66,9 @@ export async function publishedReport(id: string, user: SessionUser, action: 'RE
     return report;
   });
 }
-export async function downloadReport(id: string, user: SessionUser) {
+export async function downloadReport(id: string, user: SessionUser, colorMode: 'color' | 'bw' = 'color') {
   // Recheck publication under a lock and capture one consistent report version.
   const report = await publishedReport(id, user, 'REPORT_DOWNLOADED');
   const { template } = await getReportTemplate();
-  return { filename: `${report.accession_no}.pdf`, bytes: await makeReportPdf(report, template) };
+  return { filename: `${report.accession_no}${colorMode === 'bw' ? '-black-white' : ''}.pdf`, bytes: await makeReportPdf(report, template, colorMode) };
 }
